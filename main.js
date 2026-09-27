@@ -1,0 +1,2410 @@
+const API_BASE = '/api';
+
+// ---------------------------------------------------------------------------
+// Live inventory is owned ENTIRELY by the server: the SQLite `stock_boxes`
+// values are surfaced through GET /api/products and are the ONLY source the
+// storefront ever renders. There are no hardcoded stock constants and no local
+// fallback product arrays in this file — stock numbers enter the frontend
+// exclusively through fetchProducts() below, so what you see on a card is
+// always what the backend database currently holds.
+// ---------------------------------------------------------------------------
+let PRODUCTS = [];
+
+// Force browser to scroll to top on page reload
+if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+}
+
+window.addEventListener('beforeunload', () => {
+    window.scrollTo(0, 0);
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.scrollTo(0, 0);
+});
+
+function showCustomAlert(message) {
+  document.getElementById('custom-alert-message').innerText = message;
+  document.getElementById('custom-alert-modal').classList.add('is-open');
+}
+function closeCustomAlert() {
+  document.getElementById('custom-alert-modal').classList.remove('is-open');
+}
+
+function formatPrice(value){
+
+  return `₱${Number(value || 0).toFixed(2)}`;
+}
+
+// Temporarily unpriced microwavable sizes: display "TBA" instead of a numeric
+// amount. Prices still come from the API/DB (no hardcoded amounts here), so
+// this frontend override only changes display + ordering behaviour.
+const TBA_PRODUCT_IDS = new Set(['container-re-1600', 'container-re-2500', 'container-re-3200']);
+
+function isTbaPriceProduct(product){
+  return !!product && TBA_PRODUCT_IDS.has(String(product.id || ''));
+}
+
+function formatProductPrice(product){
+  if(isTbaPriceProduct(product)) return 'TBA';
+  return formatPrice(product ? product.price_per_box : 0);
+}
+
+function normalizeServerProducts(list){
+  // Normalize the live server payload into the single source of truth for
+  // inventory. stock_boxes always comes from the backend database — never
+  // from hardcoded frontend defaults — so admin updates and order deductions
+  // survive a page refresh.
+  return (Array.isArray(list) ? list : []).map((product) => {
+    if(!product || typeof product !== 'object') return product;
+    const stock = Number(product.stock_boxes);
+    product.stock_boxes = Number.isFinite(stock) && stock >= 0 ? Math.floor(stock) : 0;
+    product.in_stock = product.stock_boxes > 0;
+    return product;
+  });
+}
+
+function clampQtysToServerStock(){
+  // Clamp any in-progress configurator quantity to the fresh server stock.
+  // Runs only after `qtys` exists (post-DOMContentLoaded / post-fetch).
+  try{
+    if(typeof qtys === 'undefined' || !qtys) return;
+    (Array.isArray(PRODUCTS) ? PRODUCTS : []).forEach((product) => {
+      if(!product || !product.id || qtys[product.id] === undefined) return;
+      qtys[product.id] = Math.max(0, Math.min(parseInt(qtys[product.id], 10) || 0, Number(product.stock_boxes || 0)));
+    });
+  }catch(err){ /* qtys not ready yet — clamp happens on next render */ }
+}
+
+// NOTE: no localStorage (or other local) product snapshot is restored here.
+// PRODUCTS starts empty and is populated ONLY by a successful response from
+// /api/products, so a page refresh can never flash stale, cached, or
+// hardcoded stock numbers — the API is always the single source of truth.
+
+async function fetchProducts(){
+  try{
+    // ALWAYS ask the server for the real, updated stock quantities (orders +
+    // admin updates). `cache: 'no-store'` plus the no-store response headers
+    // in app.py guarantee a refresh never reuses a stale copy (e.g. 16oz cups
+    // stuck back at 34 after being reduced to 30).
+    const res = await fetch(`${API_BASE}/products`, { cache: 'no-store' });
+    if(!res.ok){
+      throw new Error(`Product request failed with status ${res.status}`);
+    }
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : (data && Array.isArray(data.products) ? data.products : null);
+    // A malformed payload counts as a failed fetch so the catalog never
+    // renders stock values that did not come from /api/products.
+    if(!list){
+      throw new Error('Malformed products payload from /api/products');
+    }
+    // The ONLY entry point for inventory data: replace the in-memory catalog
+    // with the fresh server payload (stock_boxes straight from the database).
+    PRODUCTS = normalizeServerProducts(list);
+    clampQtysToServerStock();
+  }catch(err){
+    // The API is unreachable or returned an invalid payload. Keep whatever
+    // /api/products returned earlier during THIS page session; on a cold
+    // load PRODUCTS stays empty, so no stale or fabricated stock numbers are
+    // ever rendered in place of the real server values.
+    console.error('Failed to load products:', err);
+  }
+  clampQtysToServerStock();
+  renderCatalog();
+}
+
+async function refreshProductStocks(){
+  // Re-fetch live inventory after an order (or on demand) so the catalog,
+  // configurator clamps, and cart/checkout summaries immediately reflect the
+  // deducted quantities stored in the database.
+  await fetchProducts();
+  updateConfiguratorActionState();
+  const { items } = getCartState();
+  renderCheckoutSummary(items);
+  updateCheckoutTotals();
+}
+
+function findProductById(id){
+  return PRODUCTS.find(p => p.id === id);
+}
+
+// Parse a microwavable container capacity into millilitres so RE/RO sizes
+// (e.g. "500ml", "3,200ml", "10oz") can be compared numerically.
+function microwavableCapacityMl(product){
+  const raw = String((product && (product.size || product.name)) || '');
+  const m = raw.match(/([\d,]+(?:\.\d+)?)\s*(ml|oz)/i);
+  if(!m) return Number.MAX_SAFE_INTEGER;
+  const num = parseFloat(m[1].replace(/,/g, '')) || 0;
+  return m[2].toLowerCase() === 'oz' ? num * 29.5735 : num;
+}
+
+// Ascending comparator for the Microwavable Containers section: RO Series
+// (round) first in increasing capacity, then RE Series (rectangular) in
+// increasing capacity. Keeps each series contiguous per the requested
+// RO 10 -> RO 16 -> RO 30, then RE 500 -> RE 750 -> RE 1000
+// -> (RE 1250 / RE 1450 / RE 1650 when added) -> RE 1600 -> RE 2500
+// -> RE 3200 sequence. Capacity is parsed numerically (ml/oz) so future
+// sizes slot into the right position automatically on desktop and mobile.
+function compareMicrowavableAsc(a, b){
+  const aIsRE = /\bRE\b/i.test(String(a.style || '')) || /^container-re-/i.test(String(a.id || ''));
+  const bIsRE = /\bRE\b/i.test(String(b.style || '')) || /^container-re-/i.test(String(b.id || ''));
+  if(aIsRE !== bIsRE) return aIsRE ? 1 : -1;
+  const capA = microwavableCapacityMl(a);
+  const capB = microwavableCapacityMl(b);
+  if(capA !== capB) return capA - capB;
+  return String(a.name || '').localeCompare(String(b.name || ''));
+}
+
+function getProductImageFallback(product){
+  const label = product.type === 'cup' ? `${product.size} Cup` : product.type === 'lid' ? `${product.style} Lid` : `${product.name}`;
+  const background = product.type === 'cup' ? 'e0e7ff' : product.type === 'lid' ? 'f1f5f9' : 'ecfdf5';
+  const foreground = product.type === 'cup' ? '3730a3' : product.type === 'lid' ? '334155' : '047857';
+  return `https://placehold.co/640x300/${background}/${foreground}?text=${encodeURIComponent(label)}`;
+}
+
+// Local product photography (served from the project root with ./static/ copies
+// as backup — Flask's /<path:filename> handler serves both). Cups/lids map to
+// their .webp files; microwavable containers map to their exact newly uploaded
+// .jpg files (ro10/ro16/ro30 + re500/re750/re1000/re1600/re2500). Anything
+// without a photo falls back to the placehold.co placeholder via
+// getProductImageFallback().
+function getProductImage(product){
+  const type = String(product.type || '').trim().toLowerCase();
+  const id = String(product.id || '').trim().toLowerCase();
+  const size = String(product.size || '').trim().toLowerCase();
+  const style = String(product.style || '').trim().toLowerCase();
+  const name = String(product.name || '').trim().toLowerCase();
+
+  // Microwavable Containers -> exact uploaded file paths (root-level copies,
+  // also reachable as static/<file> when mirrored into ./static/).
+  // Matched by stable product id first, then by name/size so API/DB renames
+  // still resolve to the right photo.
+  if(type === 'microwavable' || id.startsWith('container-')){
+    if(id === 'container-ro-10' || /\bro\s*10\b/.test(name) || size === '10oz') return 'ro10.jpg';
+    if(id === 'container-ro-16' || /\bro\s*16\b/.test(name) || size === '16oz') return 'ro16.jpg';
+    if(id === 'container-ro-30' || /\bro\s*30\b/.test(name) || size === '30oz') return 'ro30.jpg';
+    if(id === 'container-re-500' || /\bre\s*500\b/.test(name) || size === '500ml') return 're500.jpg';
+    if(id === 'container-re-750' || /\bre\s*750\b/.test(name) || size === '750ml') return 're750.jpg';
+    if(id === 'container-re-1000' || /\bre\s*1000\b/.test(name) || size === '1,000ml' || size === '1000ml') return 're1000.jpg';
+    if(id === 'container-re-1600' || /\bre\s*1600\b/.test(name) || size === '1,600ml' || size === '1600ml') return 're1600.jpg';
+    if(id === 'container-re-2500' || /\bre\s*2500\b/.test(name) || size === '2,500ml' || size === '2500ml') return 're2500.jpg';
+    return getProductImageFallback(product);
+  }
+
+  // Ensure other non-cup/lid items never use cup or lid photos
+  if(type !== 'cup' && type !== 'lid'){
+    return getProductImageFallback(product);
+  }
+  if(type === 'cup' || id.startsWith('cup-')){
+    if(id === 'cup-12oz' || size === '12oz') return 'static/12oz.webp';
+    if(id === 'cup-16oz' || size === '16oz') return 'static/16oz.webp';
+    if(id === 'cup-22oz' || size === '22oz') return 'static/22oz.webp';
+  }
+  if(type === 'lid' || id.startsWith('lid-')){
+    if(id === 'lid-dome' || style === 'dome') return 'static/dome.webp';
+    if(id === 'lid-flat' || style === 'flat') return 'static/flat.webp';
+    if(id === 'lid-strawless' || style === 'strawless') return 'static/strawless.webp';
+  }
+  return getProductImageFallback(product);
+}
+
+function renderCatalog(){
+  const list = document.getElementById('productList');
+  const microwavableList = document.getElementById('microwavableList');
+  if(!list || !microwavableList) return;
+  list.innerHTML = '';
+  microwavableList.innerHTML = '';
+
+  // Microwavable Containers are always displayed in INCREASING size/capacity
+  // order (RO 10 -> RO 16 -> RO 30, then RE 500 -> RE 750 -> RE 1000
+  // -> RE 1600 -> RE 2500 -> RE 3200, with RE 1250 / RE 1450 / RE 1650
+  // slotting in by capacity if added) so the section reads smallest-to-largest
+  // on both desktop and mobile. Sorting here (instead of relying on API/DB
+  // insertion order) guarantees the ascending sequence everywhere.
+  const microwavables = PRODUCTS.filter(p => p.type === 'microwavable').sort(compareMicrowavableAsc);
+  const others = PRODUCTS.filter(p => p.type !== 'microwavable');
+  const orderedProducts = [...others, ...microwavables];
+
+  orderedProducts.forEach(product => {
+    const card = document.createElement('article');
+    const stock = Number(product.stock_boxes || 0);
+    const stockLabel = stock > 0 ? 'In Stock' : 'Out of Stock';
+    const stockClasses = stock > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700';
+    // TBA-priced items are shown but not orderable: disable their qty controls.
+    const tbaLocked = isTbaPriceProduct(product);
+    const qtyDisabled = (stock === 0 || tbaLocked) ? 'disabled' : '';
+    card.className = 'flex flex-col justify-between overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm';
+    card.innerHTML = `
+      <div>
+        <div class="flex items-start justify-between gap-3 p-5 pb-3">
+          <h3 class="product-card-title font-semibold text-slate-900">${product.name}</h3>
+          <span class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${stockClasses}">${stockLabel}</span>
+        </div>
+        <figure class="product-card-media">
+          <img src="${getProductImage(product)}" data-fallback="${getProductImageFallback(product)}" alt="${product.name} preview" class="product-card-img ${product.type === 'microwavable' ? 'h-44 object-contain p-3' : 'h-64 sm:h-72 object-contain p-3'} w-full" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallback;" />
+          <figcaption class="product-card-media-label">${product.name}</figcaption>
+        </figure>
+        <div class="p-5 pt-4">
+          <p class="product-card-desc text-sm font-medium text-slate-700">${product.description}</p>
+          ${product.type === 'microwavable' ? `<p class="mt-1 text-xs font-medium text-slate-500">(Box of 10) — boxes of 10 units</p>` : ''}
+          <div class="mt-4 flex items-end justify-between gap-3">
+            <div>
+              <span class="cardPrice text-2xl font-bold text-indigo-700">${formatProductPrice(product)}</span>
+              <span class="cardPriceUnit text-xs font-medium text-slate-700"> / box</span>
+            </div>
+            <span class="text-xs font-medium text-slate-700">${stock} box(es)</span>
+          </div>
+        </div>
+      </div>
+      <div class="p-5 pt-0">
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="qtyBtn qtyMinus flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 text-lg font-bold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Decrease quantity for ${product.name}"
+            ${qtyDisabled}
+          >&minus;</button>
+                    <input
+            type="number"
+            min="0"
+            value="0"
+            class="qtyInput w-full rounded-md border border-slate-300 px-2 py-1.5 text-center text-sm font-semibold text-slate-800"
+            placeholder="0"
+            aria-label="Quantity for ${product.name}"
+            title="Quantity for ${product.name}"
+            ${qtyDisabled}
+          />
+
+          <button
+            type="button"
+            class="qtyBtn qtyPlus flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-300 text-lg font-bold text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="Increase quantity for ${product.name}"
+            ${qtyDisabled}
+          >+</button>
+        </div>
+      </div>
+    `;
+    card.dataset.qtyId = product.id;
+    const qtyInput = card.querySelector('.qtyInput');
+    const qtyMinus = card.querySelector('.qtyMinus');
+    const qtyPlus = card.querySelector('.qtyPlus');
+    qtyMinus.addEventListener('click', () => {
+      const current = parseInt(qtyInput.value || 0, 10) || 0;
+      applyCatalogQty(product, current - 1);
+    });
+    qtyPlus.addEventListener('click', () => {
+      const current = parseInt(qtyInput.value || 0, 10) || 0;
+      applyCatalogQty(product, current + 1);
+    });
+    qtyInput.addEventListener('input', () => applyCatalogQty(product, qtyInput.value));
+    (product.type === 'microwavable' ? microwavableList : list).appendChild(card);
+  });
+}
+
+function resetConfigurator(){
+  selectedCupId = null;
+  selectedLidId = null;
+  selectedMicrowavableId = null;
+  Object.keys(qtys).forEach(id => delete qtys[id]);
+  updateConfiguratorActionState();
+  // Clearing the cart also clears the City / Location selection, so the next
+  // order starts from an explicit location choice again.
+  resetDeliveryZone();
+  resetDeliveryMethod();
+  updateDeliveryFieldsVisibility(true);
+  syncCategoryTotals();
+  document.getElementById('subtotal').innerText = '₱0.00';
+  document.getElementById('shipping').innerText = '₱0.00';
+  document.getElementById('total').innerText = '₱0.00';
+  updateCartBadges(0);
+  document.getElementById('cartContent').innerHTML = '<p class="text-sm text-slate-600">No items in cart.</p>';
+  refreshCatalogQuantityInputs();
+  updateCheckoutTotals();
+}
+
+function updateConfiguratorActionState(){
+  // The floating cart FAB remains the entry point to the cart; the hero card
+  // no longer includes its own View Cart button.
+  return;
+}
+
+function applyCatalogQty(product, value){
+  // TBA-priced items cannot be ordered yet: keep their quantity at 0 so no
+  // NaN/₱0.00 line ever reaches the cart, totals, or checkout payload.
+  if(isTbaPriceProduct(product)){
+    setQty(product, 0);
+    showToast('Price to be announced — this item cannot be ordered yet.');
+    updateConfiguratorActionState();
+    refreshCatalogQuantityInputs();
+    syncCategoryTotals();
+    calculate();
+    return;
+  }
+  // Clamp the entered/edited quantity to the available stock: never below 0,
+  // never above what's in stock. Applies independently per product card.
+  const parsed = Math.max(0, Math.min(parseInt(value, 10) || 0, Number(product.stock_boxes || 0)));
+  setQty(product, parsed);
+  updateConfiguratorActionState();
+  refreshCatalogQuantityInputs();
+  syncCategoryTotals();
+  calculate();
+}
+
+function refreshCatalogQuantityInputs(){
+  // Mirror the shared quantities back onto the matching catalog card inputs
+  // AND update each card's dynamic price display so everything stays in sync.
+  // Card price = unit price × quantity (total) when qty > 1;
+  // otherwise the base unit price is shown.
+  const cards = document.querySelectorAll('[data-qty-id]');
+  cards.forEach(card => {
+    const product = findProductById(card.dataset.qtyId);
+    if(!product) return;
+
+    const input = card.querySelector('.qtyInput');
+    if(input) input.value = getQty(product);
+
+    const priceEl = card.querySelector('.cardPrice');
+    if(!priceEl) return;
+    const unitEl = card.querySelector('.cardPriceUnit');
+    if(isTbaPriceProduct(product)){
+      priceEl.textContent = 'TBA';
+      if(unitEl) unitEl.textContent = ' / box';
+      return;
+    }
+    const qty = getQty(product);
+    const unitPrice = Number(product.price_per_box || 0);
+    if(qty > 1){
+      const lineTotal = Math.round(qty * unitPrice * 100) / 100;
+      priceEl.textContent = formatPrice(lineTotal);
+      if(unitEl) unitEl.textContent = ` / ${qty} boxes total`;
+    }else{
+      priceEl.textContent = formatPrice(unitPrice);
+      if(unitEl) unitEl.textContent = ' / box';
+    }
+  });
+}
+
+function showToast(message) {
+  let toast = document.getElementById('cart-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'cart-toast';
+    document.body.appendChild(toast);
+  }
+  
+  toast.textContent = message;
+  toast.className = 'fixed z-[100] bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl transition-all duration-300 opacity-0 scale-95 font-semibold cart-toast-position';
+  
+  // Trigger animation
+  requestAnimationFrame(() => {
+    toast.classList.remove('opacity-0', 'scale-95');
+    toast.classList.add('opacity-100', 'scale-100');
+  });
+
+  // Hide after 2.5 seconds
+  setTimeout(() => {
+    toast.classList.remove('opacity-100', 'scale-100');
+    toast.classList.add('opacity-0', 'scale-95');
+  }, 2500);
+}
+
+// Convert every <i data-lucide="..."> placeholder into an inline SVG. Called
+// again after the Order Summary / Confirm Order modal inject new markup.
+// Guarded so a blocked Lucide CDN or an unknown icon name never breaks ordering.
+function refreshIcons(root){
+  if(!window.lucide || typeof window.lucide.createIcons !== 'function') return;
+  try {
+    window.lucide.createIcons(root ? { root } : undefined);
+  } catch (err) {
+    // Icons are decorative; ignore conversion errors.
+  }
+}
+
+
+
+
+let selectedCupId = null;
+let selectedLidId = null;
+let selectedMicrowavableId = null;
+// Per-product box quantities so every catalog card (12oz, 16oz, 22oz cups,
+// lid styles, microwavable sizes) can be ordered independently.
+const qtys = {};
+
+// ---------------------------------------------------------------------------
+// Quantity sync + price calculation
+// ---------------------------------------------------------------------------
+
+// 1. Item Category Summing:
+//    Cup Boxes = Qty(12oz) + Qty(16oz) + Qty(22oz).
+//    Lid Boxes = Qty(Strawless) + Qty(Dome) + Qty(Flat).
+//    Microwavable Boxes = sum of all microwavable container card quantities.
+//    Quantities are read from the per-card `qtys` map keyed by product id, so
+//    every catalog card contributes independently via its own price per box.
+function getQtyById(id){
+  return Math.max(0, parseInt(qtys[id] || 0, 10) || 0);
+}
+
+function getCategoryTotals(){
+  // Explicit per-SKU sums required by the spec. Any future/unknown SKUs of
+  // the same type are folded in via the type fallback so totals never drift.
+  // Track small (12oz) and large (16oz/22oz) cup boxes separately so the
+  // per-category totals stay accurate for the checkout payload.
+  let cupBoxes = getQtyById('cup-12oz') + getQtyById('cup-16oz') + getQtyById('cup-22oz');
+  let smallCupBoxes = getQtyById('cup-12oz');
+  let largeCupBoxes = getQtyById('cup-16oz') + getQtyById('cup-22oz');
+  let lidBoxes = getQtyById('lid-strawless') + getQtyById('lid-dome') + getQtyById('lid-flat');
+  let microwavableBoxes = 0;
+  PRODUCTS.forEach(product => {
+    const boxes = getQty(product);
+    if(product.type === 'cup' && !['cup-12oz', 'cup-16oz', 'cup-22oz'].includes(product.id)){
+      cupBoxes += boxes;
+      if(isLargeCupProduct(product)) largeCupBoxes += boxes;
+      else smallCupBoxes += boxes;
+    }
+    else if(product.type === 'lid' && !['lid-strawless', 'lid-dome', 'lid-flat'].includes(product.id)) lidBoxes += boxes;
+    else if(product.type === 'microwavable') microwavableBoxes += boxes;
+  });
+  return { cupBoxes, smallCupBoxes, largeCupBoxes, lidBoxes, microwavableBoxes };
+}
+
+// Category totals now stay in the shared `qtys` map. They are displayed
+// through calculation/order-summary updates; no hero readouts remain.
+function syncCategoryTotals(){
+  return getCategoryTotals();
+}
+
+// Type-in quantities from the removed Quick Configurator inputs are no longer
+// supported; catalog cards remain the only quantity entry point.
+function distributeCategoryQty(type, total){
+  return;
+}
+
+function productConfiguratorId(product){
+  return null;
+}
+
+function getQty(product){
+  return Math.max(0, parseInt(qtys[product.id] || 0, 10) || 0);
+}
+
+// Authoritative cart state used by both the checkout button and submission guard.
+// `items` contains products with a positive box quantity; `totalQuantity` is the
+// sum of those quantities. A cart is checkoutable only when both are non-zero.
+function getCartState(){
+  const items = PRODUCTS.filter(product => getQty(product) > 0 && !isTbaPriceProduct(product));
+  const totalQuantity = items.reduce((total, product) => total + getQty(product), 0);
+  return { items, totalQuantity };
+}
+
+function ensureCartHasItems(){
+  const { items, totalQuantity } = getCartState();
+
+  // Keep the button accurate even if a submit is triggered programmatically
+  // before the normal cart-rendering update has finished.
+  updateCartBadges(totalQuantity);
+
+  if(items.length > 0 && totalQuantity > 0) return true;
+
+  showToast('Your cart is empty. Please add items to your cart before proceeding.');
+  return false;
+}
+
+
+function setQty(product, value){
+  const parsed = Math.max(0, Math.min(parseInt(value, 10) || 0, Number(product.stock_boxes || 0)));
+  qtys[product.id] = parsed;
+  if(product.type === 'cup') selectedCupId = product.id;
+  else if(product.type === 'lid') selectedLidId = product.id;
+  else selectedMicrowavableId = product.id;
+}
+
+async function calculate(){
+  // 3. Live Subtotal & Total Updates:
+  //    Multiply every selected item's unit price by its box quantity, then
+  //    update Subtotal / Shipping / Final Total in the cart Order Summary.
+  //    Re-sync the summed category totals first so catalog card edits are
+  //    included in the current calculation.
+  syncCategoryTotals();
+  // Fulfillment radios can be changed programmatically (for example by a reset),
+  // so keep the conditionally-hidden Shipping Address + City / Location
+  // sections aligned with the selected method before totals are calculated.
+  updateDeliveryFieldsVisibility(isPickupMethodSelected());
+
+  // Aggregate every independently-ordered catalog item (12oz/16oz/22oz cups,
+  // lid styles, microwavable containers) by its own price per box.
+  let subtotal = 0;
+  const items = [];
+  PRODUCTS.forEach(product => {
+    const boxes = getQty(product);
+    if(boxes <= 0) return;
+    // Skip TBA-priced items even if a stale quantity exists (e.g. restored
+    // state): they contribute no numeric total and must not produce NaN.
+    if(isTbaPriceProduct(product)) return;
+    const lineTotal = Math.round(boxes * Number(product.price_per_box || 0) * 100) / 100;
+    subtotal += lineTotal;
+    items.push({
+      id: product.id,
+      name: product.name,
+      boxes,
+      quantity_per_box: product.quantity_per_box,
+      line_total: lineTotal
+    });
+  });
+  subtotal = Math.round(subtotal * 100) / 100;
+
+  // Lalamove Delivery (origin: Taguig) = destination base rate + cup/lid box
+  // surcharges; the FULL fee always applies (even for 50% downpayment).
+  // Microwavables add neither a base rate nor a surcharge.
+  // Fulfillment (cart checkout flow):
+  //   'standard'     -> Lalamove Delivery (We book for you): local courier
+  //     fee from the selected City / Location (#deliveryZone) + cup/lid box
+  //     surcharges.
+  //   'self_booking' -> Customer Book: Shipping Fee is always P0.00; you book
+  //     your preferred courier.
+  //   'self_pickup'  -> Self Pick-up (Warehouse): Shipping Fee is always
+  //     P0.00; pick up directly at Bagumbayan, Taguig.
+  const deliveryMethod = getSelectedDeliveryMethod();
+  const pickupMethod = deliveryMethod !== DELIVERY_METHOD_STANDARD;
+  const pickupLabel = deliveryMethod === DELIVERY_METHOD_SELF_PICKUP
+    ? SELF_PICKUP_SHIPPING_LABEL
+    : SELF_BOOKING_SHIPPING_LABEL;
+  const totals = getCategoryTotals();
+  const deliveryZone = getSelectedDeliveryZone();
+  const hasZone = deliveryZone !== '';
+  const quote = getLalamoveShipping(totals.cupBoxes, totals.lidBoxes);
+  const shipping = (subtotal > 0 && !pickupMethod && hasZone) ? quote.fee : 0;
+  const shippingLabel = subtotal <= 0
+    ? '—'
+    : (pickupMethod ? pickupLabel : quote.label);
+  const total = Math.round((subtotal + shipping) * 100) / 100;
+
+  updateSummary({
+    subtotal,
+    shipping,
+    shippingLabel,
+    // Breakdown note only applies to the Lalamove option with a chosen area.
+    shippingBreakdown: (!pickupMethod && hasZone && subtotal > 0) ? lalamoveBreakdownText(quote) : '',
+    needsZone: (!pickupMethod && !hasZone && subtotal > 0),
+    deliveryMethod,
+    deliveryZone,
+    deliveryZoneLabel: hasZone ? quote.zoneLabel : '',
+    total,
+    items
+  });
+
+}
+
+function isLargeCupProduct(product){
+  if(!product || product.type !== 'cup') return false;
+  const size = String(product.size || '').trim().toLowerCase();
+  if(size === '16oz' || size === '22oz') return true;
+  const id = String(product.id || '').trim().toLowerCase();
+  return id === 'cup-16oz' || id === 'cup-22oz';
+}
+
+function largeCupBoxesInCart(){
+  const totals = getCategoryTotals();
+  return Math.max(0, parseInt(totals.largeCupBoxes || 0, 10) || 0);
+}
+
+function hasLargeCupsInCart(){
+  return largeCupBoxesInCart() > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Fulfillment options for the cart checkout flow.
+//   standard     -> Lalamove Delivery (We book for you): destination base
+//                   rate from Taguig + cup/lid box surcharges (mirrors
+//                   app.py get_lalamove_shipping_fee). We arrange the booking;
+//                   the fee is paid upon receipt or added to the invoice.
+//   self_booking -> Customer Book (Buyer arranges Lalamove/Grab): the Shipping
+//                   Fee is always P0.00; you book your preferred courier and
+//                   we send the warehouse pick-up address & contact number
+//                   upon order confirmation.
+//   self_pickup  -> Self Pick-up (Warehouse): the Shipping Fee is always
+//                   P0.00; pick up directly at the warehouse in Bagumbayan,
+//                   Taguig once the order is 'Ready for Pick-up'.
+const DELIVERY_METHOD_STANDARD = 'standard';
+const DELIVERY_METHOD_SELF_BOOKING = 'self_booking';
+const DELIVERY_METHOD_SELF_PICKUP = 'self_pickup';
+const DELIVERY_METHOD_LABELS = {
+  [DELIVERY_METHOD_STANDARD]: 'Lalamove Delivery (We book for you)',
+  [DELIVERY_METHOD_SELF_BOOKING]: 'Customer Book (Buyer arranges Lalamove/Grab)',
+  [DELIVERY_METHOD_SELF_PICKUP]: 'Self Pick-up (Warehouse)'
+};
+const SELF_BOOKING_SHIPPING_LABEL = 'Customer Book';
+const SELF_PICKUP_SHIPPING_LABEL = 'Self Pick-up';
+const SELF_BOOKING_NOTE = "Note: You will book your preferred courier (Lalamove/Grab). We will send the warehouse pick-up address & contact number upon order confirmation.";
+const SELF_PICKUP_NOTE = "Note: Pick up directly at our warehouse in Bagumbayan, Taguig once your order status is updated to 'Ready for Pick-up'.";
+// Fulfillment note shown per option in the Order Summary + Confirm modal.
+function fulfillmentNote(method){
+  if(method === DELIVERY_METHOD_SELF_PICKUP) return SELF_PICKUP_NOTE;
+  if(method === DELIVERY_METHOD_SELF_BOOKING) return SELF_BOOKING_NOTE;
+  return '';
+}
+// Warehouse pick-up address shown in the Confirm Order modal when the
+// Customer Book or Self Pick-up (Warehouse) option is selected.
+const WAREHOUSE_PICKUP_ADDRESS = '175 M.L.Q. St., Bagumbayan, Taguig City';
+// Warehouse contact number shown directly below the Pick-up Address in the
+// Confirm Order modal whenever Customer Book / Self Pick-up is rendered.
+const WAREHOUSE_CONTACT_NUMBER = '0928 181 5599';
+
+// ---------------------------------------------------------------------------
+// Lalamove local courier shipping (origin: Taguig City). The destination base
+// rate is read from the selected #deliveryZone option, which app.py renders
+// from LALAMOVE_ZONE_OPTIONS so the estimate can never drift from the API.
+//   Total Shipping Fee = Base Location Rate + Cup Surcharge + Lid Surcharge
+//   Cups: 5 + (cupBoxes - 1) * 2      Lids: 3 + (lidBoxes - 1) * 2
+// Microwavables add neither a base rate nor a surcharge.
+// ---------------------------------------------------------------------------
+const LALAMOVE_SHIPPING_LABEL = 'Lalamove';
+const CUP_BOX_SURCHARGE_FIRST = 5;
+const CUP_BOX_SURCHARGE_ADDITIONAL = 2;
+const LID_BOX_SURCHARGE_FIRST = 3;
+const LID_BOX_SURCHARGE_ADDITIONAL = 2;
+
+function getDeliveryZoneSelect(){
+  return document.getElementById('deliveryZone');
+}
+
+// Selected zone id ('' while the customer has not picked a city yet).
+function getSelectedDeliveryZone(){
+  const select = getDeliveryZoneSelect();
+  return select ? String(select.value || '') : '';
+}
+
+// Compact zone label of the selected option: prefers the option's data-short
+// (e.g. 'Neighboring Cities') so fee lines stay short, mirroring app.py
+// delivery_zone_short_label().
+function deliveryZoneLabel(){
+  const select = getDeliveryZoneSelect();
+  if(!select || !select.selectedOptions || select.selectedOptions.length === 0) return '';
+  const option = select.selectedOptions[0];
+  const short = String(option.dataset.short || '').trim();
+  if(short) return short;
+  return String(option.textContent || '').split(' — ')[0].trim();
+}
+
+// Destination base rate comes straight from the rendered <option data-rate>.
+function deliveryZoneRate(){
+  const select = getDeliveryZoneSelect();
+  if(!select || !select.selectedOptions || select.selectedOptions.length === 0) return 0;
+  const rate = parseFloat(select.selectedOptions[0].dataset.rate || '');
+  return Number.isFinite(rate) ? rate : 0;
+}
+
+// Dynamic payment reservation limit per City / Location. Mirrors app.py
+// LALAMOVE_ZONE_RESERVATION_MINUTES / reservation_window_label():
+//   Taguig City = 30 minutes, nearby NCR cities = 1 hour, provincial = 2h+.
+function reservationWindowLabel(minutes){
+  const total = Math.max(0, parseInt(minutes || 0, 10) || 0);
+  if(total <= 0) return '—';
+  if(total % 60 === 0){
+    const hours = total / 60;
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+  return `${total} minutes`;
+}
+
+// Reservation window (minutes) from the selected option's data-reservation.
+function selectedZoneReservationMinutes(){
+  const select = getDeliveryZoneSelect();
+  if(!select || !select.selectedOptions || select.selectedOptions.length === 0) return 0;
+  const minutes = parseInt(select.selectedOptions[0].dataset.reservation || '', 10);
+  return Number.isFinite(minutes) ? minutes : 0;
+}
+
+function cupBoxSurcharge(cupBoxes){
+  const cups = Math.max(0, parseInt(cupBoxes || 0, 10) || 0);
+  if(cups <= 0) return 0;
+  return CUP_BOX_SURCHARGE_FIRST + (cups - 1) * CUP_BOX_SURCHARGE_ADDITIONAL;
+}
+
+function lidBoxSurcharge(lidBoxes){
+  const lids = Math.max(0, parseInt(lidBoxes || 0, 10) || 0);
+  if(lids <= 0) return 0;
+  return LID_BOX_SURCHARGE_FIRST + (lids - 1) * LID_BOX_SURCHARGE_ADDITIONAL;
+}
+
+// Return the full Lalamove quote for the currently selected City / Location:
+// base location rate + cup surcharge + lid surcharge.
+function getLalamoveShipping(cupBoxes, lidBoxes){
+  if(typeof cupBoxes === 'undefined'){
+    const totals = getCategoryTotals();
+    cupBoxes = totals.cupBoxes;
+    lidBoxes = totals.lidBoxes;
+  }
+  cupBoxes = Math.max(0, parseInt(cupBoxes || 0, 10) || 0);
+  lidBoxes = Math.max(0, parseInt(lidBoxes || 0, 10) || 0);
+  const baseRate = deliveryZoneRate();
+  const zoneLabel = deliveryZoneLabel();
+  const cupSurcharge = cupBoxSurcharge(cupBoxes);
+  const lidSurcharge = lidBoxSurcharge(lidBoxes);
+  return {
+    fee: Math.round((baseRate + cupSurcharge + lidSurcharge) * 100) / 100,
+    label: zoneLabel ? `${LALAMOVE_SHIPPING_LABEL} (${zoneLabel})` : LALAMOVE_SHIPPING_LABEL,
+    zoneLabel,
+    baseRate,
+    cupBoxes,
+    cupSurcharge,
+    lidBoxes,
+    lidSurcharge
+  };
+}
+
+// Order Summary note spelling out how the Lalamove fee was computed.
+function lalamoveBreakdownText(shipping){
+  if(!shipping) return '';
+  const parts = [`${shipping.zoneLabel || 'Location'} base ${formatPrice(shipping.baseRate)}`];
+  if(shipping.cupBoxes > 0){
+    parts.push(`cups ${shipping.cupBoxes} box${shipping.cupBoxes === 1 ? '' : 'es'} ${formatPrice(shipping.cupSurcharge)}`);
+  }
+  if(shipping.lidBoxes > 0){
+    parts.push(`lids ${shipping.lidBoxes} box${shipping.lidBoxes === 1 ? '' : 'es'} ${formatPrice(shipping.lidSurcharge)}`);
+  }
+  return parts.join(' + ');
+}
+
+// Clear the City / Location selector (used when the cart is cleared/reset).
+function resetDeliveryZone(){
+  const select = getDeliveryZoneSelect();
+  if(select) select.value = '';
+}
+
+// Read the currently selected fulfillment radio (defaults to Customer Book).
+function getSelectedDeliveryMethod(){
+  const selected = document.querySelector('input[name="delivery_method"]:checked');
+  const value = selected ? String(selected.value).trim().toLowerCase() : DELIVERY_METHOD_SELF_BOOKING;
+  if(value === DELIVERY_METHOD_SELF_PICKUP) return DELIVERY_METHOD_SELF_PICKUP;
+  if(value === DELIVERY_METHOD_SELF_BOOKING) return DELIVERY_METHOD_SELF_BOOKING;
+  return DELIVERY_METHOD_STANDARD;
+}
+
+function isSelfBookingSelected(){
+  return getSelectedDeliveryMethod() === DELIVERY_METHOD_SELF_BOOKING;
+}
+
+function isSelfPickupSelected(){
+  return getSelectedDeliveryMethod() === DELIVERY_METHOD_SELF_PICKUP;
+}
+
+// True for either no-courier option (Customer Book or Self Pick-up): both
+// ship at P0.00 and hide the Shipping Address + City / Location sections.
+function isPickupMethodSelected(){
+  const method = getSelectedDeliveryMethod();
+  return method === DELIVERY_METHOD_SELF_BOOKING || method === DELIVERY_METHOD_SELF_PICKUP;
+}
+
+function deliveryMethodLabel(method){
+  return DELIVERY_METHOD_LABELS[method || DELIVERY_METHOD_STANDARD] || DELIVERY_METHOD_LABELS[DELIVERY_METHOD_STANDARD];
+}
+
+// Single source of truth for the checkout address sections. Shipping Address
+// (#deliveryAddressFields), the blue shipping-fee tip box
+// (#lalamove-guide-container) and City / Location (#deliveryZoneFields) are part
+// of the checkout flow again: they are VISIBLE for Lalamove Delivery (We book
+// for you) and HIDDEN for Customer Book / Self Pick-up. updateDeliveryFieldsVisibility()
+// is called from calculate(), handleDeliveryMethodChange(), resetConfigurator()
+// and openCart() so the sections always match the selected fulfillment option.
+function getDeliveryAddressFields(){
+  return document.getElementById('deliveryAddressFields');
+}
+
+// Blue info/tip box directly above the City / Location dropdown: the itemized
+// Lalamove shipping fee per zone (Taguig City ₱60.00, Neighboring Cities
+// ₱90.00, Rest of Metro Manila ₱150.00, Nearby Provinces ₱280.00, Outer
+// Provincial ₱450.00 — see app.py LALAMOVE_ZONE_OPTIONS). styles.css documents
+// this contract: display block for Lalamove Delivery, display none for
+// Customer Book / Self Pick-up. It always moves together with the
+// Shipping Address + City / Location sections.
+function updateLalamoveGuideVisibility(showGuide){
+  const guide = document.getElementById('lalamove-guide-container');
+  if(!guide) return;
+  guide.classList.toggle('hidden', !showGuide);
+  if(showGuide){
+    guide.removeAttribute('aria-hidden');
+    guide.style.display = '';
+  } else {
+    guide.setAttribute('aria-hidden', 'true');
+    guide.style.display = 'none';
+  }
+}
+
+// Dynamic address visibility for the checkout drawer:
+//   - Lalamove Delivery (We book for you) -> SHOW the blue shipping-fee tip
+//     box, "Shipping Address" and "City / Location" so the courier
+//     destination (needed for the zone-based fee) can be captured.
+//   - Customer Book / Self Pick-up (pickup === true) -> HIDE all three
+//     again; no courier destination is collected for pick-up.
+function updateDeliveryFieldsVisibility(pickup){
+  const showFields = !pickup;
+  const fields = getDeliveryAddressFields();
+  const address = document.getElementById('customerAddress');
+  const zoneFields = document.getElementById('deliveryZoneFields');
+  const setSectionVisible = (section, visible) => {
+    if(!section) return;
+    section.classList.toggle('hidden', !visible);
+    if(visible){
+      section.removeAttribute('aria-hidden');
+      section.style.display = '';
+    } else {
+      section.setAttribute('aria-hidden', 'true');
+      section.style.display = 'none';
+    }
+  };
+  setSectionVisible(fields, showFields);
+  setSectionVisible(zoneFields, showFields);
+  // Blue fee-breakdown tip box rides along with the two sections above.
+  updateLalamoveGuideVisibility(showFields);
+  // Shipping Address is required only while Lalamove Delivery needs it
+  // (mirrors the server-side check in app.py); hidden sections are never
+  // required, so Customer Book / Self Pick-up submissions stay unaffected.
+  if(address){
+    if(showFields) address.setAttribute('required', '');
+    else address.removeAttribute('required');
+  }
+  // The <select> itself stays ENABLED while hidden so a city picked earlier
+  // survives switching back to Lalamove Delivery; only its section is hidden.
+  const zone = getDeliveryZoneSelect();
+  if(zone){
+    zone.removeAttribute('disabled');
+    zone.disabled = false;
+    // Keep the picker out of the tab order only while it is hidden.
+    if(showFields) zone.removeAttribute('tabindex');
+    else zone.setAttribute('tabindex', '-1');
+  }
+}
+
+// Fulfillment radio change: re-sync which form sections are visible
+// (blue fee tip box + Shipping Address + City / Location), then recalculate.
+function handleDeliveryMethodChange(){
+  updateDeliveryFieldsVisibility(isPickupMethodSelected());
+  calculate();
+}
+
+// Restore the default (Customer Book) selection after the cart is cleared,
+// and keep 100% Full Payment selected.
+function resetDeliveryMethod(){
+  const customerBook = document.getElementById('deliveryMethodSelfBooking');
+  if(customerBook) customerBook.checked = true;
+  const paymentSelect = document.getElementById('payment-type-select');
+  if(paymentSelect) paymentSelect.value = 'full';
+  updateDeliveryFieldsVisibility(true);
+}
+
+function updateSummary(data){
+  document.getElementById('subtotal').innerText = formatPrice(data.subtotal);
+  const shippingLabel = data.shippingLabel || data.shipping_label || '—';
+  document.getElementById('shipping').innerText = formatPrice(data.shipping);
+  document.getElementById('shipping').title = shippingLabel !== '—' ? `Delivery via ${shippingLabel}` : '';
+  document.getElementById('total').innerText = formatPrice(data.total);
+  const cartContent = document.getElementById('cartContent');
+  if((data.items || []).length === 0){
+    cartContent.innerHTML = `<p class="text-sm font-medium text-slate-700">No items in cart.</p>`;
+    updateCartBadges(0);
+    updateCheckoutTotals();
+    refreshIcons();
+    return;
+  }
+  updateCartBadges(data.items.reduce((s,i)=>s+i.boxes,0));
+  cartContent.innerHTML = '';
+  data.items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'flex items-center justify-between py-2 border-b';
+    const boxLabel = Number(it.boxes) === 1 ? 'box' : 'boxes';
+    row.innerHTML = `<div><div class="font-medium">${it.name}</div><div class="text-sm font-medium text-slate-700">${it.boxes} ${boxLabel} - ${it.quantity_per_box} units/box</div></div><div class="text-right">${formatPrice(it.line_total)}</div>`;
+    cartContent.appendChild(row);
+  });
+  const totals = document.createElement('div');
+  totals.className = 'pt-3';
+  const shipLine = shippingLabel && shippingLabel !== '—' ? `Shipping (${shippingLabel})` : 'Shipping';
+  // Note under the shipping line of the Order Summary:
+  //  - Customer Book / Self Pick-up: spell out the fulfillment instructions.
+  //  - Lalamove with no City / Location yet: prompt for the location.
+  //  - Lalamove with a location: show the computed base rate + surcharges.
+  let shipNote = '';
+  const summaryNote = fulfillmentNote(data.deliveryMethod);
+  if(summaryNote){
+    shipNote = `<div class="mt-1 text-xs font-medium leading-5 text-slate-700">${summaryNote}</div>`;
+  }else if(data.needsZone){
+    shipNote = '<div class="mt-1 text-xs font-medium leading-5 text-slate-700">Select your City / Location to estimate the Lalamove delivery fee.</div>';
+  }else if(data.shippingBreakdown){
+    shipNote = `<div class="mt-1 text-xs font-medium leading-5 text-slate-700">Lalamove fee: ${data.shippingBreakdown}</div>`;
+  }
+  totals.innerHTML = `<div class="flex items-center justify-between"><div class="text-sm">Subtotal</div><div class="font-medium">${formatPrice(data.subtotal)}</div></div><div class="flex items-center justify-between mt-2"><div class="text-sm">${shipLine}</div><div class="font-medium">${formatPrice(data.shipping)}</div></div>${shipNote}<div class="flex items-center justify-between mt-3 text-lg font-bold text-indigo-700"><div>Total</div><div>${formatPrice(data.total)}</div></div>`;
+  cartContent.appendChild(totals);
+  updateCheckoutTotals();
+  refreshIcons();
+}
+
+function updateCheckoutTotals() {
+  const subtotalStr = document.getElementById('subtotal').innerText.replace(/[^0-9.]/g, '');
+  const subtotal = parseFloat(subtotalStr) || 0;
+  const shippingStr = document.getElementById('shipping').innerText.replace(/[^0-9.]/g, '');
+  const shipping = parseFloat(shippingStr) || 0;
+  const totalStr = document.getElementById('total').innerText.replace(/[^0-9.]/g, '');
+  const total = parseFloat(totalStr) || 0;
+  const paymentType = document.getElementById('payment-type-select').value;
+
+  // Estimated Shipping Fee line item in the Order Summary breakdown box. The
+  // value mirrors `shipping` — already ₱0.00 for Customer Book / Self Pick-up,
+  // and the live courier estimate for Lalamove Delivery (We book for you) —
+  // so the row stays in sync alongside Amount Due Now / Balance upon Delivery.
+  const estimatedShippingAmount = document.getElementById('estimated-shipping-amount');
+  if (estimatedShippingAmount) estimatedShippingAmount.innerText = formatPrice(shipping);
+
+  // FULL shipping fee is always charged upfront, even for 50% downpayment:
+  // Initial Due = (Subtotal * 50%) + Full Shipping; Balance = Subtotal * 50%.
+  let dueNow = total;
+  const checkoutButton = document.getElementById('checkoutBtn');
+  if(checkoutButton){
+    // PRODUCTS quantities are the single source of truth, so a cart is
+    // checkoutable only when at least one item and quantity are present.
+    const { items, totalQuantity } = getCartState();
+    const cartIsEmpty = items.length === 0 || totalQuantity <= 0;
+    checkoutButton.disabled = cartIsEmpty;
+    checkoutButton.setAttribute('aria-disabled', String(cartIsEmpty));
+  }
+
+  let remaining = 0;
+
+  if (paymentType === '50_percent') {
+    const downBase = Math.round(subtotal * 0.5 * 100) / 100;
+    dueNow = Math.round((downBase + shipping) * 100) / 100;
+    remaining = downBase;
+    document.getElementById('remaining-balance-row').classList.remove('is-hidden-row');
+    document.getElementById('remaining-balance-row').classList.add('is-block-row');
+  } else {
+    document.getElementById('remaining-balance-row').classList.remove('is-block-row');
+    document.getElementById('remaining-balance-row').classList.add('is-hidden-row');
+  }
+
+  document.getElementById('due-now-amount').innerText = formatPrice(dueNow);
+  document.getElementById('remaining-balance-amount').innerText = formatPrice(remaining);
+}
+
+// Keep the floating (#floating-cart-badge) cart count in sync whenever the
+// cart contents change. The header icon is now the Order History button
+// (#nav-orders-btn), so it no longer shows a cart count badge.
+function updateCartBadges(count){
+  const floatingBadge = document.getElementById('floating-cart-badge');
+  if(floatingBadge) floatingBadge.innerText = String(count);
+}
+
+// UI / drawer handlers
+function openCart(){
+  const panel = document.getElementById('drawerPanel');
+  panel.classList.remove('drawer-closed-state');
+  panel.classList.add('drawer-open-state');
+  panel.setAttribute('aria-hidden','false');
+  document.body.classList.add('drawer-open');
+  // Reopen the drawer at the top of its scrollable body (#drawerScrollBody)
+  // so the Order Summary header and the sticky "Place Order & Proceed" bar
+  // (#checkoutSubmitBar) are framed exactly as the customer last saw them —
+  // never stranded mid-scroll from a previous session.
+  const drawerBody = document.getElementById('drawerScrollBody');
+  if(drawerBody){ drawerBody.scrollTop = 0; }
+  updateBackToTopButton();
+  updateCheckoutTotals();
+  // Sync the conditionally-hidden Shipping Address + City / Location sections
+  // and the blue fee-breakdown tip box with the CURRENT radio selection
+  // immediately upon opening so the initial state is always accurate.
+  updateDeliveryFieldsVisibility(isPickupMethodSelected());
+  // The drawer holds static Lucide placeholders; convert them on every open in
+  // case the CDN loaded after the initial page render.
+  refreshIcons();
+  if(window.lucide && typeof window.lucide.createIcons === 'function'){
+    try { window.lucide.createIcons(); } catch(err) { /* decorative only */ }
+  }
+}
+
+function closeCart(){
+  const panel = document.getElementById('drawerPanel');
+  panel.classList.remove('drawer-open-state');
+  panel.classList.add('drawer-closed-state');
+  panel.setAttribute('aria-hidden','true');
+  document.body.classList.remove('drawer-open');
+  updateBackToTopButton();
+}
+
+// Alias used by the floating cart button's inline onclick handler.
+function openCartModal(){
+  openCart();
+}
+
+// "Clear All" in the Order Summary header: reset every item quantity to 0 and
+// let the shared calculator push P0.00 back into the Order Summary totals and
+// the checkout fields, while keeping the City / Location and Delivery Method
+// selections the customer already made.
+async function clearCartItems(){
+  selectedCupId = null;
+  selectedLidId = null;
+  selectedMicrowavableId = null;
+  Object.keys(qtys).forEach(id => delete qtys[id]);
+  refreshCatalogQuantityInputs();
+  updateConfiguratorActionState();
+  await calculate();
+  refreshIcons();
+  showToast('Cart cleared — all item quantities reset to 0.');
+}
+
+
+// ---------------------------------------------------------------------------
+// GCash payment details for the Payment Instructions boxes in the Order
+// Confirmation Modal (#confirmGcash*) and the post-checkout Order Placed modal
+// (#pendingGcash*). A single account is listed as the sole payment option.
+// Defined once here so every payment screen shows the same wallet details.
+//
+// NOTE: the Order Summary drawer deliberately renders NO Payment Instructions
+// box — those details live ONLY in the Order Confirmation Modal, directly above
+// the required GCash proof upload field.
+// ---------------------------------------------------------------------------
+const GCASH_ACCOUNT_1_NAME = 'JE****N ER***T E.';
+const GCASH_ACCOUNT_1_NUMBER = '0966 745 3719';
+// Legacy aliases (kept so any other code referencing the single-account names
+// keeps working — they point at the sole account).
+const GCASH_ACCOUNT_NAME = GCASH_ACCOUNT_1_NAME;
+const GCASH_ACCOUNT_NUMBER = GCASH_ACCOUNT_1_NUMBER;
+
+function renderGcashInstructions(){
+  // The drawer ids (#gcashAccountName / #gcashAccountNumber) were removed along
+  // with the Order Summary drawer's Payment Instructions box, so only the Order
+  // Confirmation Modal (#confirmGcash*) and the post-checkout Order Placed modal
+  // (#pendingGcash*) are updated here.
+  ['confirmGcashAccountName', 'pendingGcashAccountName'].forEach((id) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = GCASH_ACCOUNT_1_NAME;
+  });
+  ['confirmGcashAccountNumber', 'pendingGcashAccountNumber'].forEach((id) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = GCASH_ACCOUNT_1_NUMBER;
+  });
+}
+
+// Event wiring
+document.addEventListener('DOMContentLoaded', () => {
+  resetConfigurator();
+  fetchProducts();
+  // Push the GCash account details into the Order Confirmation Modal (and the
+  // post-checkout Order Placed modal) Payment Instructions boxes.
+  renderGcashInstructions();
+  // Enforce the new defaults on first load: Self-Booking delivery + 100% Full
+  // Payment, with Shipping Address / City / Location hidden.
+  resetDeliveryMethod();
+  const phoneInput = document.getElementById('customerPhone');
+  if(phoneInput) phoneInput.addEventListener('input', function(){
+    this.value = this.value.replace(/[^0-9]/g, '');
+    if(this.value.length > 0 && !this.value.startsWith('09')){
+      this.value = this.value.startsWith('9')
+        ? `0${this.value}`
+        : `09${this.value.replace(/^0+/, '')}`;
+    }
+    this.value = this.value.slice(0, 11);
+  });
+  const checkoutForm = document.getElementById('checkoutForm');
+  if(checkoutForm){
+    // "Place Order & Proceed" (#checkoutBtn, type=submit) → Order Confirmation
+    // Modal. GUEST CHECKOUT: there is intentionally NO Login / Register gate
+    // here, so #authModal never interrupts the order summary flow and guests go
+    // straight to the "Confirm Your Order" step (see openConfirmationModal and
+    // submitOrder, which are equally ungated).
+    checkoutForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if(!ensureCartHasItems()) return;
+      openConfirmationModal();
+    });
+  }
+  // The header cart icon was replaced by the Order History button
+  // (#nav-orders-btn), which uses an inline onclick routing to
+  // handleNavOrdersClick(). The floating cart FAB remains the cart entry point.
+  document.getElementById('closeCart').addEventListener('click', closeCart);
+  // "Clear All" resets every quantity to 0 and zeroes the Order Summary totals.
+  document.getElementById('clearCartBtn').addEventListener('click', clearCartItems);
+  // Explicit backdrop overlay dismiss: the dimmed .cart-overlay element sits
+  // below the panel and only accepts pointer events while the drawer is open,
+  // so tapping/clicking ANYWHERE outside the Order Summary panel closes it.
+  const cartOverlay = document.getElementById('cartOverlay');
+  if (cartOverlay) {
+    cartOverlay.addEventListener('click', (e) => {
+      // Stop the click from also bubbling into the container fallback below.
+      e.stopPropagation();
+      closeCart();
+    });
+  }
+  // Fallback dismiss: if the overlay element is missing (or its CSS failed to
+  // load) the container itself is still a valid click target while open.
+  const cartDrawer = document.getElementById('cartDrawer');
+  if (cartDrawer) {
+    cartDrawer.addEventListener('click', (e) => {
+      if (e.target === cartDrawer) closeCart();
+    });
+  }
+  // Keyboard equivalent of the backdrop dismiss: Escape closes the Order
+  // Summary panel, unless a dialog is stacked on top of it.
+  document.addEventListener('keydown', (e) => {
+    if(e.key !== 'Escape') return;
+    if(!document.body.classList.contains('drawer-open')) return;
+    const confirmModal = document.getElementById('confirmOrderModal');
+    if(confirmModal && !confirmModal.classList.contains('hidden')) return;
+    closeCart();
+  });
+  document.getElementById('addMoreItemsBtn').addEventListener('click', closeConfirmationModal);
+  document.getElementById('confirmOrderBtn').addEventListener('click', submitOrder);
+  // Required GCash proof screenshot (reference is optional): keeps
+  // "Yes, Place Order" disabled until a valid image is attached
+  // (see setupGcashProofUpload).
+  setupGcashProofUpload();
+  document.getElementById('closeModalBtn').addEventListener('click', closeOrderPendingModal);
+  setupAuthModal();
+  setupAccountNudgeModal();
+  setupCustomerOrdersModal();
+  setupAboutModal();
+  setupSecretAdminAccess();
+});
+
+// Auth modal handlers
+let currentUser = null;
+
+function setupAuthModal(){
+  const authModal = document.getElementById('authModal');
+  const authBtn = document.getElementById('authBtn');
+  const closeAuth = document.getElementById('closeAuth');
+  const tabLogin = document.getElementById('tabLogin');
+  const tabRegister = document.getElementById('tabRegister');
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+
+  const closeAuthModal = () => {
+    authModal.classList.add('hidden');
+    authModal.classList.remove('flex');
+    document.body.classList.remove('modal-open');
+  };
+
+  // Opening the modal always starts on Login; Register remains available
+  // through the adjacent tab.
+  if(authBtn) authBtn.addEventListener('click', openAuthModal);
+  if(closeAuth) closeAuth.addEventListener('click', closeAuthModal);
+
+  // Forgot password modal wiring
+  const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
+  const closeForgotPasswordBtn = document.getElementById('closeForgotPassword');
+  const backToAuthBtn = document.getElementById('backToAuthBtn');
+  const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+  const forgotPasswordModal = document.getElementById('forgot-password-modal');
+
+  if(forgotPasswordBtn) forgotPasswordBtn.addEventListener('click', showForgotPassword);
+  if(closeForgotPasswordBtn) closeForgotPasswordBtn.addEventListener('click', closeForgotPassword);
+  if(backToAuthBtn) backToAuthBtn.addEventListener('click', backToAuthModal);
+  if(forgotPasswordForm){
+    forgotPasswordForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleResetPassword();
+    });
+  }
+  if(forgotPasswordModal){
+    forgotPasswordModal.addEventListener('click', (e) => {
+      if(e.target === forgotPasswordModal) closeForgotPassword();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape') closeForgotPassword();
+  });
+
+  tabLogin.addEventListener('click', () => {
+    tabLogin.classList.add('border-indigo-600', 'text-indigo-600');
+    tabLogin.classList.remove('border-transparent', 'text-slate-500');
+    tabRegister.classList.remove('border-indigo-600', 'text-indigo-600');
+    tabRegister.classList.add('border-transparent', 'text-slate-500');
+    loginForm.classList.remove('hidden');
+    registerForm.classList.add('hidden');
+  });
+
+  tabRegister.addEventListener('click', () => {
+    tabRegister.classList.add('border-indigo-600', 'text-indigo-600');
+    tabRegister.classList.remove('border-transparent', 'text-slate-500');
+    tabLogin.classList.remove('border-indigo-600', 'text-indigo-600');
+    tabLogin.classList.add('border-transparent', 'text-slate-500');
+    registerForm.classList.remove('hidden');
+    loginForm.classList.add('hidden');
+  });
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(loginForm);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include'
+      });
+
+      const result = await res.json();
+            if (res.ok) {
+        currentUser = result.user;
+        updateAuthUI();
+        closeAuthModal();
+        fillCustomerData();
+      } else {
+        showCustomAlert(result.error);
+      }
+    } catch (err) {
+      showCustomAlert('Login failed');
+    }
+  });
+
+  registerForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(registerForm);
+    const data = Object.fromEntries(formData.entries());
+
+    try {
+      const res = await fetch(`${API_BASE}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        credentials: 'include'
+      });
+      const result = await res.json();
+      if (res.ok) {
+        currentUser = result.user;
+        updateAuthUI();
+        closeAuthModal();
+        fillCustomerData();
+      } else {
+        showCustomAlert(result.error);
+      }
+    } catch (err) {
+      showCustomAlert('Registration failed');
+    }
+  });
+
+
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+  // Render the static Lucide icon placeholders (Clear All, Close, modal icons).
+  refreshIcons();
+
+    // Check if already logged in
+  fetch(`${API_BASE}/me`, { credentials: 'include' })
+    .then(res => res.json())
+
+    .then(data => {
+      if (data.user) {
+        currentUser = data.user;
+        updateAuthUI();
+        fillCustomerData();
+      }
+    }).catch(() => {});
+}
+
+// Opens the Login / Register modal. Used by the navbar Order History button's
+// inline onclick so guests are prompted to sign in before viewing orders.
+function openAuthModal(){
+  const authModal = document.getElementById('authModal');
+  if(!authModal) return;
+  authModal.classList.remove('hidden');
+  authModal.classList.add('flex');
+  document.body.classList.add('modal-open');
+
+  // Default to the Login tab so guests are prompted to sign in.
+  const tabLogin = document.getElementById('tabLogin');
+  const tabRegister = document.getElementById('tabRegister');
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  if(tabLogin && tabRegister && loginForm && registerForm){
+    tabLogin.classList.add('border-indigo-600', 'text-indigo-600');
+    tabLogin.classList.remove('border-transparent', 'text-slate-500');
+    tabRegister.classList.add('border-transparent', 'text-slate-500');
+    tabRegister.classList.remove('border-indigo-600', 'text-indigo-600');
+    loginForm.classList.remove('hidden');
+    registerForm.classList.add('hidden');
+  }
+}
+
+// Forgot password flow: the login tab links here to let a customer set a new
+// password for their own account from the reset modal.
+function showForgotPassword(){
+  const modal = document.getElementById('forgot-password-modal');
+  if(!modal) return;
+
+  // Close the login/register modal so the reset dialog is the only one open.
+  const authModal = document.getElementById('authModal');
+  if(authModal){
+    authModal.classList.add('hidden');
+    authModal.classList.remove('flex');
+  }
+
+  const errorBox = document.getElementById('forgotPasswordError');
+  if(errorBox){
+    errorBox.textContent = '';
+    errorBox.classList.add('hidden');
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.body.classList.add('modal-open');
+
+  const emailInput = document.getElementById('resetEmail');
+  if(emailInput) emailInput.focus();
+}
+
+function closeForgotPassword(){
+  const modal = document.getElementById('forgot-password-modal');
+  if(!modal || modal.classList.contains('hidden')) return;
+
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  document.body.classList.remove('modal-open');
+
+  const errorBox = document.getElementById('forgotPasswordError');
+  if(errorBox){
+    errorBox.textContent = '';
+    errorBox.classList.add('hidden');
+  }
+
+  const form = document.getElementById('forgotPasswordForm');
+  if(form) form.reset();
+}
+
+// Back button in the reset dialog: discard the reset form and return to the
+// Login / Register modal so customers can sign in instead.
+function backToAuthModal(){
+  closeForgotPassword();
+  openAuthModal();
+}
+
+async function handleResetPassword(){
+  const form = document.getElementById('forgotPasswordForm');
+  if(!form) return;
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  const errorBox = document.getElementById('forgotPasswordError');
+  const email = (document.getElementById('resetEmail').value || '').trim();
+  const newPassword = document.getElementById('resetNewPassword').value || '';
+
+  const showResetError = (text) => {
+    if(!errorBox) return;
+    errorBox.textContent = text;
+    errorBox.classList.remove('hidden');
+  };
+
+  if(errorBox){
+    errorBox.textContent = '';
+    errorBox.classList.add('hidden');
+  }
+
+  if(!email || !newPassword){
+    showResetError('Email address and new password are required.');
+    return;
+  }
+  if(newPassword.length < 8){
+    showResetError('New password must be at least 8 characters.');
+    return;
+  }
+
+  if(submitButton){
+    submitButton.disabled = true;
+    submitButton.textContent = 'Resetting...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, new_password: newPassword }),
+      credentials: 'include'
+    });
+    const result = await res.json().catch(() => ({}));
+
+    if(res.ok){
+      closeForgotPassword();
+      showCustomAlert(result.message || 'Your password has been reset. You can now log in.');
+    } else {
+      showResetError(result.error || 'Unable to reset password.');
+    }
+  } catch (err) {
+    showResetError('Unable to reset password. Please try again.');
+  } finally {
+    if(submitButton){
+      submitButton.disabled = false;
+      submitButton.textContent = 'Reset Password';
+    }
+  }
+}
+
+// Sign the customer out: invalidate the server session, clear browser storage
+// and the checkout fields, then hard-reset the UI back to the guest state.
+async function logout(){
+  try {
+    await fetch(`${API_BASE}/logout`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch (err) {
+    // Best-effort: still clear local state if the server is unreachable.
+  }
+
+  currentUser = null;
+  localStorage.clear();
+  sessionStorage.clear();
+
+  // Explicitly clear the checkout input values (phone, name, address).
+  document.getElementById('customerPhone').value = '';
+  document.getElementById('customerName').value = '';
+  document.getElementById('customerAddress').value = '';
+
+  // Hard-reset the UI back to the guest state.
+  window.location.reload();
+}
+
+function updateAuthUI(){
+  const authBtn = document.getElementById('authBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (currentUser) {
+    authBtn.textContent = currentUser.full_name;
+    authBtn.disabled = true;
+    logoutBtn.classList.remove('hidden');
+    wrapUsernameAsOrdersButton();
+  } else {
+    authBtn.textContent = 'Login / Register';
+    authBtn.disabled = false;
+    logoutBtn.classList.add('hidden');
+    unwrapUsernameAsOrdersButton();
+  }
+}
+
+function wrapUsernameAsOrdersButton(){
+  // Wrap the navbar username inside a clickable button that opens the
+  // customer orders modal, so customers can check order status.
+  const authBtn = document.getElementById('authBtn');
+  const parent = authBtn && authBtn.parentNode;
+  if(!authBtn || !parent) return;
+  if(parent.getAttribute && parent.getAttribute('data-orders-wrap') === 'true') return;
+
+  const nextSibling = authBtn.nextElementSibling;
+  const wrapper = document.createElement('button');
+  wrapper.type = 'button';
+  wrapper.className = 'hover:text-slate-900';
+  wrapper.setAttribute('data-orders-wrap', 'true');
+  wrapper.setAttribute('onclick', 'openCustomerOrders()');
+  wrapper.setAttribute('aria-label', `Check order status for ${currentUser.full_name}`);
+  wrapper.appendChild(authBtn);
+  if(nextSibling){
+    parent.insertBefore(wrapper, nextSibling);
+  } else {
+    parent.appendChild(wrapper);
+  }
+  // The disabled user button must not swallow clicks meant for the wrapper.
+  authBtn.style.pointerEvents = 'none';
+  authBtn.title = 'View order status';
+}
+
+function unwrapUsernameAsOrdersButton(){
+  const authBtn = document.getElementById('authBtn');
+  if(!authBtn) return;
+  authBtn.style.pointerEvents = '';
+  authBtn.removeAttribute('title');
+  const parent = authBtn.parentNode;
+  if(parent && parent.getAttribute && parent.getAttribute('data-orders-wrap') === 'true'){
+    parent.replaceWith(authBtn);
+  }
+}
+
+function fillCustomerData(){
+  if (currentUser) {
+    const nameField = document.getElementById('customerName');
+    const addressField = document.getElementById('customerAddress');
+    const phoneField = document.getElementById('customerPhone');
+
+    if (nameField) nameField.value = currentUser.full_name || '';
+    if (addressField) addressField.value = currentUser.shipping_address || '';
+    if (phoneField) phoneField.value = currentUser.phone || '';
+  }
+  // Shipping Address / City / Location visibility follows the selected
+  // fulfillment option after autofill: shown for Lalamove Delivery, hidden
+  // for Customer Book / Self Pick-up.
+  updateDeliveryFieldsVisibility(isPickupMethodSelected());
+}
+
+
+
+// Navbar Order History button: signed-in customers see their order history;
+// guests see an account recommendation instead of being blocked silently.
+function handleNavOrdersClick(){
+  if(currentUser){
+    openCustomerOrders();
+  } else {
+    openAccountNudgeModal();
+  }
+}
+
+// Guest account recommendation: explain the benefits, offer login/register,
+// or let the visitor continue as a guest. Returns focus behavior consistent
+// with the auth and orders modals.
+function openAccountNudgeModal(){
+  const modal = document.getElementById('accountNudgeModal');
+  if(!modal) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.body.classList.add('modal-open');
+}
+
+function closeAccountNudgeModal(){
+  const modal = document.getElementById('accountNudgeModal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  if(document.getElementById('authModal').classList.contains('hidden')
+    && document.getElementById('customer-orders-modal').classList.contains('hidden')
+    && document.getElementById('orderPendingModal').classList.contains('hidden')
+    && document.getElementById('confirmOrderModal').classList.contains('hidden')){
+    document.body.classList.remove('modal-open');
+  }
+}
+
+function openAuthModalWithTab(tab){
+  openAuthModal();
+  const loginForm = document.getElementById('loginForm');
+  const registerForm = document.getElementById('registerForm');
+  const tabLogin = document.getElementById('tabLogin');
+  const tabRegister = document.getElementById('tabRegister');
+  if(!loginForm || !registerForm || !tabLogin || !tabRegister) return;
+  const showRegister = tab === 'register';
+  loginForm.classList.toggle('hidden', showRegister);
+  registerForm.classList.toggle('hidden', !showRegister);
+  tabLogin.classList.toggle('border-indigo-600', !showRegister);
+  tabLogin.classList.toggle('text-indigo-600', !showRegister);
+  tabLogin.classList.toggle('border-transparent', showRegister);
+  tabLogin.classList.toggle('text-slate-500', showRegister);
+  tabRegister.classList.toggle('border-indigo-600', showRegister);
+  tabRegister.classList.toggle('text-indigo-600', showRegister);
+  tabRegister.classList.toggle('border-transparent', !showRegister);
+  tabRegister.classList.toggle('text-slate-500', !showRegister);
+}
+
+function setupAccountNudgeModal(){
+  const modal = document.getElementById('accountNudgeModal');
+  const loginBtn = document.getElementById('accountNudgeLoginBtn');
+  const registerBtn = document.getElementById('accountNudgeRegisterBtn');
+  const dismissBtn = document.getElementById('accountNudgeDismissBtn');
+  if(!modal || !loginBtn || !registerBtn || !dismissBtn) return;
+
+  const openAuthTab = (tab) => {
+    closeAccountNudgeModal();
+    openAuthModalWithTab(tab);
+  };
+  loginBtn.addEventListener('click', () => openAuthTab('login'));
+  registerBtn.addEventListener('click', () => openAuthTab('register'));
+  dismissBtn.addEventListener('click', closeAccountNudgeModal);
+  modal.addEventListener('click', event => {
+    if(event.target === modal) closeAccountNudgeModal();
+  });
+  document.addEventListener('keydown', event => {
+    if(event.key === 'Escape' && !modal.classList.contains('hidden')) closeAccountNudgeModal();
+  });
+}
+
+function openCustomerOrders(){
+  const modal = document.getElementById('customer-orders-modal');
+  const list = document.getElementById('customer-orders-list');
+  if(!modal || !list) return;
+
+  if(!currentUser){
+    openAccountNudgeModal();
+    return;
+  }
+
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.body.classList.add('modal-open');
+
+  list.innerHTML = '';
+  const loading = document.createElement('p');
+  loading.className = 'text-sm font-medium text-slate-700';
+  loading.textContent = 'Loading your orders…';
+  list.appendChild(loading);
+
+  fetch(`${API_BASE}/user/orders`, { credentials: 'include' })
+    .then(res => res.json())
+    .then(data => {
+      if(data.orders === undefined){
+        list.innerHTML = '';
+        const msg = document.createElement('p');
+        msg.className = 'text-sm text-red-600';
+        msg.textContent = data.error || 'Could not load your orders.';
+        list.appendChild(msg);
+        return;
+      }
+      renderCustomerOrders(data.orders);
+    })
+    .catch(() => {
+      list.innerHTML = '';
+      const msg = document.createElement('p');
+      msg.className = 'text-sm text-red-600';
+      msg.textContent = 'Network error loading your orders. Please try again.';
+      list.appendChild(msg);
+    });
+}
+
+// STATUS MODEL (mirrors app.py / manage-orders-ps.html): an order is either
+// accepted or declined. Accepted is green, declined is red. Legacy rows still
+// carrying an older value (Pending, Paid, Completed, ...) are normalized to
+// "Accepted / Paid" before lookup so nothing ever falls through to the grey
+// default and the customer sees the same two states the staff dashboard uses.
+const ACCEPTED_STATUS = 'Accepted / Paid';
+const DECLINED_STATUS = 'Declined';
+const CUSTOMER_ORDER_BADGES = {
+  [ACCEPTED_STATUS]: 'bg-emerald-100 text-emerald-700',
+  [DECLINED_STATUS]: 'bg-red-100 text-red-700'
+};
+
+// Anything not explicitly declined is presented as accepted, so a stale status
+// string from an older order can never render an unrecognised badge.
+function normalizeOrderStatus(status){
+  return status === DECLINED_STATUS ? DECLINED_STATUS : ACCEPTED_STATUS;
+}
+
+function orderStatusBadge(status){
+  const normalized = normalizeOrderStatus(status);
+  const classes = CUSTOMER_ORDER_BADGES[normalized] || 'bg-slate-100 text-slate-700';
+  return `<span class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${classes}">${escapeHtml(normalized)}</span>`;
+}
+
+function orderItemsSummary(order){
+  const lines = [];
+  const cupBoxes = Number(order.cup_boxes || 0);
+  const lidBoxes = Number(order.lid_boxes || 0);
+  const microBoxes = Number(order.microwavable_boxes || 0);
+  if(cupBoxes > 0) lines.push(`Cups: ${escapeHtml(order.cup_size || 'Selected size')} — ${cupBoxes} box(es)`);
+  if(lidBoxes > 0) lines.push(`Lids: ${escapeHtml(order.lid_style || 'Selected style')} — ${lidBoxes} box(es)`);
+  if(microBoxes > 0) lines.push(`Containers: ${escapeHtml(order.microwavable_size || 'Selected size')} — ${microBoxes} box(es)`);
+  return lines.length > 0 ? lines.join('<br>') : '<span class="font-medium text-slate-600">No item details.</span>';
+}
+
+function formatOrderDate(value){
+  if(!value) return '';
+  const date = new Date(value);
+  if(isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderCustomerOrders(orders){
+  const list = document.getElementById('customer-orders-list');
+  if(!list) return;
+  list.innerHTML = '';
+
+  if(!orders || orders.length === 0){
+    const empty = document.createElement('p');
+    empty.className = 'text-sm font-medium text-slate-700';
+    empty.textContent = 'No orders found for your account yet.';
+    list.appendChild(empty);
+    return;
+  }
+
+  orders.forEach(order => {
+    const card = document.createElement('div');
+    card.className = 'rounded-lg border border-slate-200 bg-white p-4';
+    // Contact identity for the order details: prefer the values stored ON the
+    // order itself (customer_name / customer_phone), which exist for guest
+    // checkouts too, and only fall back to the signed-in profile. This keeps the
+    // order details meaningful without requiring a registered account id.
+    const contactName = order.customer_name || (currentUser ? currentUser.full_name : '') || '';
+    const contactPhone = order.customer_phone || (currentUser ? currentUser.phone : '') || '';
+    card.innerHTML = `
+      <div class="flex items-center justify-between gap-3">
+        <span class="font-semibold text-indigo-700">Order #${escapeHtml(order.id)}</span>
+        ${orderStatusBadge(order.status)}
+      </div>
+      <p class="mt-1 text-xs font-medium text-slate-700">${escapeHtml(formatOrderDate(order.created_at))}</p>
+      <!-- Guest / Customer contact info (Name + Phone Number) shown in the order
+           details, sourced from the order record so guests without an account
+           still see who the order is for. -->
+      <div class="mt-2 rounded-md bg-slate-50 p-2 text-xs font-medium leading-5 text-slate-700">
+        <div>Name: <span class="font-semibold text-slate-800">${escapeHtml(contactName) || '—'}</span></div>
+        <div>Phone Number: <span class="font-semibold text-slate-800">${escapeHtml(contactPhone) || '—'}</span></div>
+      </div>
+      <div class="mt-1 text-sm font-medium leading-5 text-slate-700">${orderItemsSummary(order)}</div>
+      <div class="mt-1 flex items-end justify-between gap-3">
+        <span class="text-sm font-semibold text-slate-800">Total: ${formatPrice(order.total_amount)}</span>
+        <span class="text-xs font-medium text-slate-700">${escapeHtml(order.payment_status || '')}</span>
+      </div>
+    `;
+    list.appendChild(card);
+  });
+}
+
+function setupCustomerOrdersModal(){
+  const modal = document.getElementById('customer-orders-modal');
+  const closeBtn = document.getElementById('closeCustomerOrders');
+  if(!modal || !closeBtn) return;
+
+  const close = () => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    document.body.classList.remove('modal-open');
+  };
+
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', event => {
+    if(event.target === modal) close();
+  });
+  document.addEventListener('keydown', event => {
+    if(event.key === 'Escape' && !modal.classList.contains('hidden')) close();
+  });
+}
+
+function escapeHtml(value){
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function debounce(fn, wait){
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(()=>fn(...args), wait); };
+}
+
+function scrollToCatalog(event){
+  if(event) event.preventDefault();
+  const catalog = document.getElementById('catalog');
+  if(catalog){
+    catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function scrollToTop(event){
+  if(event) event.preventDefault();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateBackToTopButton(){
+  const button = document.getElementById('backToTopBtn');
+  if(!button) return;
+  const drawerOpen = document.body.classList.contains('drawer-open');
+  button.classList.toggle('hidden', drawerOpen || window.scrollY <= 300);
+}
+
+window.addEventListener('scroll', updateBackToTopButton);
+
+function closeOrderPendingModal(){
+  const modal = document.getElementById('orderPendingModal');
+  modal.classList.add('opacity-0');
+  setTimeout(() => {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }, 300);
+  closeCart();
+  resetConfigurator();
+  document.getElementById('customerPhone').value = '';
+  document.getElementById('customerName').value = '';
+  document.getElementById('customerAddress').value = '';
+}
+
+function showOrderPendingModal(phone, amounts){
+  // Inject the phone number the customer entered at checkout so the reminder
+  // reads: "...An SMS confirmation will also be sent to 09123456789."
+  const phoneEl = document.getElementById('modalPhone');
+  if(phoneEl) phoneEl.textContent = phone || '';
+
+  // GCash Payment / Order Invoice summary. The amounts are captured from the
+  // checkout payload in submitOrder() because the live on-screen totals have
+  // already been cleared by resetCheckoutState() when this modal opens.
+  const summary = amounts || {};
+  const paymentType = summary.paymentType === 'full' ? 'full' : '50_percent';
+  const dueNow = Number(summary.dueNow) || 0;
+  const remaining = Number(summary.remaining) || 0;
+
+  const totalEl = document.getElementById('pendingOrderTotal');
+  if(totalEl) totalEl.textContent = formatPrice(summary.total);
+
+  const dueLabel = document.getElementById('pendingOrderDueLabel');
+  if(dueLabel){
+    dueLabel.textContent = paymentType === 'full'
+      ? 'Amount Due (Full Payment)'
+      : 'Amount Due (50% Downpayment)';
+  }
+  const dueEl = document.getElementById('pendingOrderAmountDue');
+  if(dueEl) dueEl.textContent = formatPrice(dueNow);
+
+  // The balance row only applies to the 50% downpayment option: a full payment
+  // leaves nothing to settle later, so the row is hidden.
+  const balanceRow = document.getElementById('pendingOrderBalanceRow');
+  if(balanceRow){
+    const balanceEl = document.getElementById('pendingOrderBalance');
+    if(balanceEl) balanceEl.textContent = formatPrice(remaining);
+    balanceRow.classList.toggle('is-flex-row', remaining > 0);
+    balanceRow.classList.toggle('is-hidden-row', remaining <= 0);
+  }
+
+  const modal = document.getElementById('orderPendingModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  // Lucide placeholders (the screenshot-reminder camera icon) are converted on
+  // open in case the CDN script loaded after the first paint.
+  refreshIcons(modal);
+  requestAnimationFrame(() => modal.classList.remove('opacity-0'));
+}
+
+// ---------------------------------------------------------------------------
+// GCash proof of payment (Order Confirmation Modal)
+// ---------------------------------------------------------------------------
+// #confirmOrderBtn ("Yes, Place Order") starts DISABLED every time the modal
+// opens and is only enabled once the customer attaches a valid image to
+// #gcashProofInput. #gcashRefInput is OPTIONAL (blank = QR scan, saved as
+// "N/A (QR Payment)"); a typed value must be 13 digits. The file is POSTed
+// to /api/checkout as "gcash_proof" and the reference as "gcash_ref"
+// (see submitOrder / app.py process_checkout).
+const GCASH_PROOF_IMAGE_TYPES = [
+  'image/jpeg', 'image/jpg', 'image/png', 'image/webp'
+];
+const GCASH_PROOF_IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
+const GCASH_REF_PATTERN = /^[0-9]{13}$/;
+
+function getGcashProofInput(){
+  return document.getElementById('gcashProofInput');
+}
+
+function getGcashProofFile(){
+  const input = getGcashProofInput();
+  return (input && input.files && input.files.length) ? input.files[0] : null;
+}
+
+function isAcceptedGcashProofFile(file){
+  if(!file) return false;
+  const type = (file.type || '').toLowerCase();
+  if(type && GCASH_PROOF_IMAGE_TYPES.includes(type)) return true;
+  // Some mobile pickers hand back an empty MIME type — fall back to the
+  // filename extension so a valid .jpg/.png is never wrongly rejected.
+  return !type && GCASH_PROOF_IMAGE_EXT.test(file.name || '');
+}
+
+function getGcashRefInput(){
+  return document.getElementById('gcashRefInput');
+}
+
+function getGcashRefValue(){
+  const input = getGcashRefInput();
+  return input ? (input.value || '').replace(/[^0-9]/g, '').slice(0, 13) : '';
+}
+
+function isValidGcashRef(value){
+  // OPTIONAL field: blank is valid (saved as "N/A (QR Payment)"); a supplied
+  // value must be a complete 13-digit GCash reference.
+  const trimmed = (value || '').trim();
+  if(!trimmed) return true;
+  return GCASH_REF_PATTERN.test(trimmed);
+}
+
+function isGcashRefProvided(){
+  return getGcashRefValue().length > 0;
+}
+
+function updateConfirmOrderButtonState(){
+  // "Yes, Place Order" unlocks when a valid proof image is attached. The
+  // GCash reference is OPTIONAL — blank means QR scan (stored as
+  // "N/A (QR Payment)"), so it never blocks the button; a supplied value
+  // only needs to pass the 13-digit format check.
+  const file = getGcashProofFile();
+  if(!isAcceptedGcashProofFile(file)){
+    setConfirmOrderButtonEnabled(false);
+    return;
+  }
+  const refValue = getGcashRefValue();
+  setConfirmOrderButtonEnabled(!refValue || isValidGcashRef(refValue));
+}
+
+function setGcashRefStatus(message, isError){
+  const status = document.getElementById('gcashRefStatus');
+  if(!status) return;
+  status.textContent = message;
+  status.classList.toggle('text-red-600', !!isError);
+  status.classList.toggle('text-slate-500', !isError);
+}
+
+function handleGcashRefChange(){
+  const input = getGcashRefInput();
+  if(input){
+    // Digits only, capped at 13 characters so pasted text can't smuggle letters.
+    const cleaned = (input.value || '').replace(/[^0-9]/g, '').slice(0, 13);
+    if(input.value !== cleaned) input.value = cleaned;
+  }
+  const value = getGcashRefValue();
+  if(!value){
+    setGcashRefStatus('Pwede mong iwanang blanko kung nag-scan ka gamit ang QR Code.', false);
+  }else if(!isValidGcashRef(value)){
+    setGcashRefStatus(`Reference must be 13 digits (currently ${value.length}/13).`, true);
+  }else{
+    setGcashRefStatus('Reference number looks good — matches the GCash receipt format.', false);
+  }
+  updateConfirmOrderButtonState();
+}
+function setConfirmOrderButtonEnabled(enabled){
+  const btn = document.getElementById('confirmOrderBtn');
+  if(!btn) return;
+  btn.disabled = !enabled;
+  btn.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+}
+
+function resetGcashProofUpload(){
+  const input = getGcashProofInput();
+  if(input) input.value = '';
+  const refInput = getGcashRefInput();
+  if(refInput) refInput.value = '';
+  const preview = document.getElementById('gcashProofPreview');
+  const previewImg = document.getElementById('gcashProofPreviewImg');
+  if(previewImg) previewImg.removeAttribute('src');
+  if(preview) preview.classList.add('hidden');
+  const status = document.getElementById('gcashProofStatus');
+  if(status){
+    status.textContent = 'No file selected yet. Please attach your GCash payment screenshot (JPG, PNG or WEBP only).';
+    status.classList.remove('text-red-600');
+    status.classList.add('text-slate-500');
+  }
+  setGcashRefStatus('Pwede mong iwanang blanko kung nag-scan ka gamit ang QR Code.', false);
+  // The modal always re-opens with the final action locked.
+  setConfirmOrderButtonEnabled(false);
+}
+
+function handleGcashProofChange(){
+  const file = getGcashProofFile();
+  const preview = document.getElementById('gcashProofPreview');
+  const previewImg = document.getElementById('gcashProofPreviewImg');
+  const status = document.getElementById('gcashProofStatus');
+
+  const setStatus = (message, isError) => {
+    if(!status) return;
+    status.textContent = message;
+    status.classList.toggle('text-red-600', !!isError);
+    status.classList.toggle('text-slate-500', !isError);
+  };
+  const clearPreview = () => {
+    if(previewImg) previewImg.removeAttribute('src');
+    if(preview) preview.classList.add('hidden');
+  };
+
+  if(!file){
+    clearPreview();
+    setStatus('No file selected yet. Please attach your GCash payment screenshot (JPG, PNG or WEBP only).', false);
+    updateConfirmOrderButtonState();
+    return;
+  }
+
+  if(!isAcceptedGcashProofFile(file)){
+    clearPreview();
+    setStatus('Invalid file. Please upload a JPG, PNG or WEBP image only.', true);
+    updateConfirmOrderButtonState();
+    return;
+  }
+
+  // Valid image: show the file details — the button unlocks only when the
+  // 13-digit GCash reference number is also valid (see
+  // updateConfirmOrderButtonState).
+  setStatus(`Selected: ${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB) — proof attached.`, false);
+
+  if(preview && previewImg){
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      previewImg.src = event.target.result;
+      preview.classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  }
+  updateConfirmOrderButtonState();
+}
+
+function setupGcashProofUpload(){
+  const input = getGcashProofInput();
+  if(input) input.addEventListener('change', handleGcashProofChange);
+  const refInput = getGcashRefInput();
+  if(refInput){
+    refInput.addEventListener('input', handleGcashRefChange);
+    refInput.addEventListener('change', handleGcashRefChange);
+  }
+  // Arm the disabled state as soon as the listeners are installed.
+  resetGcashProofUpload();
+}
+
+function closeConfirmationModal(){
+  const modal = document.getElementById('confirmOrderModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  document.body.classList.remove('modal-open');
+}
+
+
+function resetCheckoutState(){
+  closeConfirmationModal();
+  closeCart();
+  resetConfigurator();
+  resetDeliveryMethod();
+  const phoneEl = document.getElementById('customerPhone');
+  if(phoneEl) phoneEl.value = '';
+  const nameEl = document.getElementById('customerName');
+  if(nameEl) nameEl.value = '';
+  const addressEl = document.getElementById('customerAddress');
+  if(addressEl) addressEl.value = '';
+}
+
+
+function validateCheckoutFields(){
+  const nameEl = document.getElementById('customerName');
+  const phoneEl = document.getElementById('customerPhone');
+  const name = nameEl ? nameEl.value.trim() : '';
+  const phone = phoneEl ? phoneEl.value.trim() : '';
+
+  // Phone Number is the primary contact field (Shopee-style): it is required
+  // for every order and is where the SMS order update is sent. Shipping
+  // Address and City / Location were removed from the form, so only name +
+  // phone are validated here.
+  if(!name || !phone){
+    showCustomAlert('Please enter your name and phone number.');
+    return false;
+  }
+
+  if(!/^09\d{9}$/.test(phone)){
+    showCustomAlert('Please enter a valid Philippine mobile number in the format 09123456789.');
+    return false;
+  }
+
+  // City / Location was removed from the checkout form, so no zone check is
+  // needed here. Lalamove fee math falls back to the default zone server-side.
+  return true;
+}
+
+
+function populateCheckoutHiddenFields(){
+  const setHidden = (id, value) => {
+    const el = document.getElementById(id);
+    if(el) el.value = (value === undefined || value === null) ? '' : value;
+  };
+
+  // Aggregate the independently-quantified catalog products into the single
+  // product-per-category fields the checkout endpoint expects. For each type,
+  // use the product with the highest quantity as the representative variation
+  // and sum its category's boxes so nothing is silently dropped from the total.
+  const itemsByType = { cup: [], lid: [], microwavable: [] };
+  PRODUCTS.forEach(product => {
+    const boxes = getQty(product);
+    if(boxes <= 0) return;
+    itemsByType[product.type] = itemsByType[product.type] || [];
+    itemsByType[product.type].push({ product, boxes });
+  });
+
+  const cupItems = itemsByType.cup.sort((a,b) => b.boxes - a.boxes);
+  const lidItems = itemsByType.lid.sort((a,b) => b.boxes - a.boxes);
+  const microItems = itemsByType.microwavable.sort((a,b) => b.boxes - a.boxes);
+
+  const cup = cupItems[0] || {};
+  const lid = lidItems[0] || {};
+  const micro = microItems[0] || {};
+  const cupBoxes = cupItems.reduce((s, i) => s + i.boxes, 0);
+  const lidBoxes = lidItems.reduce((s, i) => s + i.boxes, 0);
+  const microBoxes = microItems.reduce((s, i) => s + i.boxes, 0);
+
+  const subtotal = parseFloat(document.getElementById('subtotal').innerText.replace(/[^0-9.]/g, '') || 0);
+  const shipping = parseFloat(document.getElementById('shipping').innerText.replace(/[^0-9.]/g, '') || 0);
+  const total = parseFloat(document.getElementById('total').innerText.replace(/[^0-9.]/g, '') || 0);
+  const paymentType = document.getElementById('payment-type-select').value;
+  // FULL shipping always upfront: Due = (Subtotal*50%) + Full Shipping.
+  const downBase = Math.round(subtotal * 0.5 * 100) / 100;
+  const dueNow = paymentType === '50_percent' ? Math.round((downBase + shipping) * 100) / 100 : total;
+  const remaining = paymentType === '50_percent' ? downBase : 0;
+
+  setHidden('checkoutCupId', cup.product ? cup.product.id : '');
+  setHidden('checkoutCupSize', cup.product?.size || '');
+  setHidden('checkoutCupBoxes', cupBoxes);
+  setHidden('checkoutLidId', lid.product ? lid.product.id : '');
+  setHidden('checkoutLidStyle', lid.product?.style || '');
+  setHidden('checkoutLidBoxes', lidBoxes);
+  setHidden('checkoutMicrowavableId', micro.product ? micro.product.id : '');
+  setHidden('checkoutMicrowavableSize', micro.product?.size || '');
+  setHidden('checkoutMicrowavableBoxes', microBoxes);
+  setHidden('checkoutHasLargeCups', cupItems.some(i => isLargeCupProduct(i.product)) ? '1' : '0');
+  setHidden('checkoutSmallCupBoxes', cupItems.reduce((s, i) => s + (isLargeCupProduct(i.product) ? 0 : i.boxes), 0));
+  setHidden('checkoutLargeCupBoxes', cupItems.reduce((s, i) => s + (isLargeCupProduct(i.product) ? i.boxes : 0), 0));
+  setHidden('checkoutSubtotal', Math.round(subtotal * 100) / 100);
+  setHidden('checkoutShipping', Math.round(shipping * 100) / 100);
+  setHidden('checkoutTotal', Math.round(total * 100) / 100);
+  setHidden('checkoutDueNow', dueNow);
+  setHidden('checkoutRemainingBalance', remaining);
+}
+async function openConfirmationModal(){
+  if(!ensureCartHasItems()) return;
+  // GUEST CHECKOUT: no Login / Register gate — a signed-in account is NOT
+  // required to reach the "Confirm Your Order" modal. Only the contact details
+  // (Full Name + Phone Number) are validated here.
+  if(!validateCheckoutFields()) return;
+
+  await calculate();
+  populateCheckoutHiddenFields();
+  document.body.classList.add('modal-open');
+  const items = document.getElementById('confirmOrderItems');
+
+  items.replaceChildren();
+  const selectedItems = [];
+  PRODUCTS.forEach(product => {
+    const boxes = getQty(product);
+    if(boxes <= 0) return;
+    const label = product.type === 'cup' ? `Cups: ${product.size}` : product.type === 'lid' ? `Lids: ${product.style} Lid` : `Microwavable: ${product.size}`;
+    selectedItems.push(`${label} - ${boxes} ${boxes === 1 ? 'box' : 'boxes'}`);
+  });
+
+  if(selectedItems.length === 0){
+    items.innerHTML = '<p class="font-medium text-slate-700">No items selected.</p>';
+  }else{
+    selectedItems.forEach(item => {
+      const line = document.createElement('div');
+      line.textContent = item;
+      items.appendChild(line);
+    });
+  }
+
+  document.getElementById('confirmOrderTotal').textContent = document.getElementById('total').textContent;
+
+  const subtotalAmount = Number(document.getElementById('subtotal').textContent.replace(/[^0-9.]/g, '') || 0);
+  const shippingAmount = Number(document.getElementById('shipping').textContent.replace(/[^0-9.]/g, '') || 0);
+  const totalAmount = Number(document.getElementById('total').textContent.replace(/[^0-9.]/g, '') || 0);
+  // Fulfillment: Customer Book / Self Pick-up always show a P0.00 shipping
+  // fee; Lalamove Delivery (We book for you) shows the zone fee
+  // (base rate + cup/lid surcharges).
+  const deliveryMethod = getSelectedDeliveryMethod();
+  const pickupMethod = deliveryMethod !== DELIVERY_METHOD_STANDARD;
+  const methodNote = fulfillmentNote(deliveryMethod);
+  const shippingLabel = pickupMethod
+    ? (deliveryMethod === DELIVERY_METHOD_SELF_PICKUP ? SELF_PICKUP_SHIPPING_LABEL : SELF_BOOKING_SHIPPING_LABEL)
+    : ((document.getElementById('shipping').title || '').replace(/^Delivery via /, '') || LALAMOVE_SHIPPING_LABEL);
+  const paymentType = document.getElementById('payment-type-select').value;
+  const fullRow = document.getElementById('confirmOrderFullRow');
+  const downpaymentRow = document.getElementById('confirmOrderDownpaymentRow');
+  const paymentNote = document.getElementById('confirmOrderPaymentNote');
+  const deliveryMethodField = document.getElementById('confirmOrderDeliveryMethod');
+  if (deliveryMethodField) {
+    deliveryMethodField.textContent = DELIVERY_METHOD_LABELS[deliveryMethod] || DELIVERY_METHOD_LABELS[DELIVERY_METHOD_STANDARD];
+  }
+  const deliveryZoneField = document.getElementById('confirmOrderDeliveryZone');
+  if (deliveryZoneField) {
+    deliveryZoneField.textContent = pickupMethod
+      ? '—'
+      : (deliveryZoneLabel() || 'Not selected');
+  }
+
+  // Dynamic payment reservation window for the selected City / Location.
+  const reservationNote = document.getElementById('confirmOrderReservationNote');
+  if (reservationNote) {
+    reservationNote.textContent = getSelectedDeliveryZone()
+      ? `⏳ Reserved for ${reservationWindowLabel(selectedZoneReservationMinutes())} from confirmation (${deliveryZoneLabel()}) — send your GCash payment within this window.`
+      : '';
+  }
+
+  // Address line: Customer Book / Self Pick-up show the warehouse address;
+  // Lalamove Delivery shows the customer's Shipping Address instead
+  // (the row stays hidden when there is no address to show).
+  const addressRow = document.getElementById('confirmOrderAddressRow');
+  const addressText = document.getElementById('confirmOrderAddressText');
+  const contactText = document.getElementById('confirmOrderContactText');
+  if (addressRow && addressText) {
+    if (pickupMethod) {
+      addressText.textContent = `Pick-up Address: ${WAREHOUSE_PICKUP_ADDRESS}`;
+      if (contactText) {
+        contactText.textContent = `Contact Number: ${WAREHOUSE_CONTACT_NUMBER}`;
+        contactText.style.display = '';
+      }
+      addressRow.classList.remove('is-hidden-row');
+      addressRow.classList.add('is-flex-row');
+    } else {
+      const shippingAddress = document.getElementById('customerAddress').value.trim();
+      if (contactText) contactText.style.display = 'none';
+      if (shippingAddress) {
+        addressText.textContent = `Shipping Address: ${shippingAddress}`;
+        addressRow.classList.remove('is-hidden-row');
+        addressRow.classList.add('is-flex-row');
+      } else {
+        addressRow.classList.remove('is-flex-row');
+        addressRow.classList.add('is-hidden-row');
+      }
+    }
+  }
+
+  if (paymentType === 'full') {
+    // 100% Full Payment: show the full total as the required payment.
+    fullRow.classList.remove('is-hidden-row');
+    fullRow.classList.add('is-flex-row');
+    downpaymentRow.classList.remove('is-flex-row');
+    downpaymentRow.classList.add('is-hidden-row');
+    document.getElementById('confirmOrderRequiredPayment').textContent = formatPrice(totalAmount);
+    paymentNote.textContent = pickupMethod
+      ? `Full payment (${formatPrice(subtotalAmount)} items) required via GCash. ${methodNote}`
+      : `Full payment (${formatPrice(subtotalAmount)} items + ${formatPrice(shippingAmount)} ${shippingLabel} shipping) required via GCash.`;
+  } else {
+    // 50% Downpayment: Due = (Subtotal*50%) + FULL shipping; Balance = Subtotal*50%.
+    fullRow.classList.remove('is-flex-row');
+    fullRow.classList.add('is-hidden-row');
+    downpaymentRow.classList.remove('is-hidden-row');
+    downpaymentRow.classList.add('is-flex-row');
+    const downBase = Math.round(subtotalAmount * 0.5 * 100) / 100;
+    const confirmDownpayment = Math.round((downBase + shippingAmount) * 100) / 100;
+    document.getElementById('confirmOrderDownpayment').textContent = formatPrice(confirmDownpayment);
+    document.getElementById('confirmOrderDownpaymentRow').firstElementChild.textContent = pickupMethod
+      ? 'Required Initial (50% items + ₱0.00 shipping)'
+      : `Required Initial (50% items + full ${shippingLabel} shipping)`;
+    paymentNote.textContent = pickupMethod
+      ? `A ${formatPrice(downBase)} downpayment (50% of items) = ${formatPrice(confirmDownpayment)} is required via GCash. The remaining ${formatPrice(downBase)} balance will be paid upon ${deliveryMethod === DELIVERY_METHOD_SELF_PICKUP ? 'pick-up' : 'delivery'}. ${methodNote}`
+      : `A ${formatPrice(downBase)} downpayment (50% of items) + ${formatPrice(shippingAmount)} full ${shippingLabel} shipping = ${formatPrice(confirmDownpayment)} is required via GCash. The remaining ${formatPrice(downBase)} balance will be paid upon delivery.`;
+  }
+
+  const modal = document.getElementById('confirmOrderModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  // Lucide placeholders inside the modal are converted on first open.
+  refreshIcons(modal);
+  // Re-arm the required GCash proof upload: clears any previous file/preview
+  // and locks "Yes, Place Order" again until a fresh image is attached.
+  resetGcashProofUpload();
+}
+
+async function submitOrder(){
+  if(!ensureCartHasItems()) return;
+  // GUEST CHECKOUT: the final "Yes, Place Order" action is ungated as well, so
+  // #authModal can never pop up over a completed order summary. app.py's
+  // process_checkout() simply stores the order with user_id = NULL when nobody
+  // is signed in.
+  if(!validateCheckoutFields()) return;
+
+  try{
+    // Recalculate the totals and mirror the selected items/quantities/totals
+    // into the hidden fields of #checkoutForm so the POSTed payload is complete.
+    await calculate();
+    populateCheckoutHiddenFields();
+
+    const formEl = document.getElementById('checkoutForm');
+    const formData = new FormData(formEl);
+    const checkoutData = Object.fromEntries(formData.entries());
+
+    // GCash payment proof (REQUIRED) + reference (OPTIONAL): captured BEFORE
+    // resetCheckoutState() tears the modal down, so they can be appended to
+    // the multipart payload. The button stays disabled until a valid image is
+    // attached (blank reference = QR scan, stored as "N/A (QR Payment)"),
+    // but the guards are kept as a final safety net for keyboard/JS submits.
+    const proofFile = getGcashProofFile();
+    if(!proofFile || !isAcceptedGcashProofFile(proofFile)){
+      showCustomAlert('Please upload your GCash payment screenshot / proof (JPG, PNG or WEBP) before placing the order.');
+      return;
+    }
+    const gcashRefRaw = getGcashRefValue();
+    if(gcashRefRaw && !isValidGcashRef(gcashRefRaw)){
+      handleGcashRefChange();
+      showCustomAlert('The GCash reference number must be 13 digits — or leave it blank if you paid by scanning the QR code.');
+      const refInput = getGcashRefInput();
+      if(refInput) refInput.focus();
+      return;
+    }
+    // Blank reference (QR scan) defaults to "N/A (QR Payment)" for the DB row.
+    const gcashRefValue = gcashRefRaw || 'N/A (QR Payment)';
+    // Multipart submission: the exact same checkout fields PLUS the proof image
+    // (FormData is a snapshot, so the later form reset cannot affect it).
+    const submitData = new FormData(formEl);
+    submitData.append('gcash_proof', proofFile, proofFile.name);
+    // Force the reference into the payload: sanitized 13-digit value when
+    // typed, or "N/A (QR Payment)" when left blank (QR scan). The modal
+    // input already carries name="gcash_ref", but set() guarantees this
+    // value wins even if the DOM value was edited mid-submit.
+    submitData.set('gcash_ref', gcashRefValue);
+    // Capture the customer's phone number before the form is reset — it is the
+    // value injected into the order success popup. FormData holds it as
+    // checkoutData.phone because the input carries name="phone"; reading the
+    // element directly is a safety fallback.
+    const customerPhone = (
+      checkoutData.phone ||
+      (document.getElementById('customerPhone') || {}).value ||
+      ''
+    ).trim();
+
+    // Snapshot the GCash payment summary for the post-checkout Order Placed
+    // modal: the totals live only in the checkout payload/hidden fields, which
+    // resetCheckoutState() clears below.
+    const pendingAmounts = {
+      paymentType: checkoutData.payment_type || '50_percent',
+      total: Number(checkoutData.total) || 0,
+      dueNow: Number(checkoutData.due_now) || 0,
+      remaining: Number(checkoutData.remaining_balance) || 0
+    };
+
+    // Clear the local cart and close checkout before waiting for the network request.
+    resetCheckoutState();
+    // NOTE: no explicit Content-Type header — the browser sets the multipart
+    // boundary itself so app.py can read BOTH request.form (the checkout
+    // fields + gcash_ref) and request.files['gcash_proof'] (the screenshot).
+    const res = await fetch('/api/checkout', {
+      method: 'POST',
+      body: submitData,
+      credentials: 'include'
+    });
+    const data = await res.json();
+    if(!res.ok){
+      showCustomAlert(data.error || 'Failed to place order');
+      return;
+    }
+    showOrderPendingModal(customerPhone, pendingAmounts);
+    // Re-fetch the REAL updated stocks from the server (never hardcoded
+    // defaults) so the catalog immediately reflects the deducted quantities.
+    await refreshProductStocks();
+  }catch(err){
+    showCustomAlert('Network error placing order');
+  }
+}
+
+
+
+function openAbout(){
+  const modal = document.getElementById('aboutModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+  document.body.classList.add('modal-open');
+}
+
+function closeAbout(){
+  const modal = document.getElementById('aboutModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  document.body.classList.remove('modal-open');
+}
+
+
+function setupAboutModal(){
+  const aboutLink = document.getElementById('aboutLink');
+  const closeButton = document.getElementById('closeAbout');
+  const modal = document.getElementById('aboutModal');
+  aboutLink.addEventListener('click', event => {
+    event.preventDefault();
+    openAbout();
+  });
+  closeButton.addEventListener('click', closeAbout);
+  modal.addEventListener('click', event => {
+    if(event.target === modal) closeAbout();
+  });
+  document.addEventListener('keydown', event => {
+    if(event.key === 'Escape') closeAbout();
+  });
+}
+
+function setupSecretAdminAccess(){
+  const siteLogo = document.getElementById('siteLogo');
+  const openAdmin = () => { window.location.href = 'manage-orders-ps.html'; };
+
+  document.addEventListener('keydown', event => {
+    if(event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'a'){
+      event.preventDefault();
+      openAdmin();
+    }
+  });
+
+  // The hero logo keeps the double-click admin shortcut. The "Pack & Sip"
+  // header brand (#siteBrand) is intentionally non-clickable, so no click or
+  // double-click handler is attached to it.
+  if(siteLogo) siteLogo.addEventListener('dblclick', openAdmin);
+}

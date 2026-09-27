@@ -1,0 +1,1398 @@
+:root{
+  --brand-indigo:#4f46e5;
+}
+
+/* Navigation brand: styled "Pack & Sip Wholesale" text (replaces the logo
+   image, which moved to the hero banner). Clean, bold, modern store-header
+   look in the brand indigo; the "Wholesale" eyebrow sits underneath so the
+   bar stays compact. */
+.nav-brand-text {
+  display: inline-block;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--brand-indigo);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nav-brand-text:hover {
+  color: #4338ca;
+}
+
+.nav-brand-amp {
+  font-weight: 700;
+}
+
+.nav-brand-sub {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: #64748b;
+  line-height: 1.2;
+  margin-top: 2px;
+}
+
+/* Hero brand logo: official mark above the "Wholesale Boxes of Cups, Lids &
+   Microwavable Containers" headline. Uses the single brand asset favicon.png
+   (square 1:1 artwork, shared with the browser tab icon), so the prominent
+   185px width renders the mark square; height: auto + object-fit: contain
+   guarantee the artwork never distorts. Centered above the headline with a
+   16px bottom margin — the .hero-copy rule below centers the logo with the
+   heading on both desktop and mobile. */
+.hero-logo {
+  display: block;
+  width: 185px;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+  margin: 0 auto 16px auto;
+}
+
+/* Hero / main app banner (static/app.webp): full-width photo below the brand
+   mark and above the headline. Rounded + capped height so product photography
+   reads as a banner; object-fit: cover crops gracefully; display:none via the
+   inline onerror fallback when app.webp hasn't been added yet. */
+.hero-banner {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  max-height: 300px;
+  height: auto;
+  object-fit: cover;
+  border-radius: 12px;
+  margin: 0 auto 16px auto;
+}
+
+/* Hero text block: logo, headline, subdescription, and bullets are centered
+   as one group on both desktop and mobile for a balanced banner identity.
+   The bullets list keeps left-aligned text inside its centered box so the
+   two short lines read neatly rather than staggering. */
+.hero-copy {
+  text-align: center;
+}
+
+.hero-copy ul {
+  display: inline-block;
+  text-align: left;
+}
+
+/* Navigation brand logo: the transparent PNG composites cleanly on the white
+   header, so no blending workarounds are applied here. (Kept for backward
+   compatibility with any legacy markup; current pages use .nav-brand-text in
+   the navbar and .hero-logo for the artwork.) A fixed height keeps
+   it optically aligned with the nav links inside the flex header; width:auto
+   preserves the original (1408x768) aspect ratio and object-fit: contain
+   guarantees the artwork is never stretched even if a future rule constrains
+   its width. Height is 70px on desktop (was 56px) so the "PACK & SIP" mark is
+   large and prominent, and max-height is explicitly cleared so nothing can
+   clip the enlarged art. (The nav logo is a plain <img> — there is no separate
+   logo SVG/icon button in the header to size.) */
+.nav-logo {
+  display: block;
+  height: 70px;
+  width: auto;
+  max-height: none;
+  object-fit: contain;
+}
+
+/* Navbar container — the flex row inside <header id="top"> that holds the
+   logo, the nav links, and the cart (Order History) button.
+   - padding: 12px 24px frames the enlarged 70px logo with even breathing
+     room and matches the px-6 utilities on the same element in index.html.
+   - min-height: 85px (border-box via Tailwind preflight) guarantees a tall
+     bar; with the 70px logo the row naturally reaches ~94px, so the bigger
+     logo fits comfortably without clutter.
+   - align-items: center keeps the logo, the "About" / "Login / Register"
+     links, and the cart button optically centered on the vertical axis of
+     the taller logo.
+   The #top > div id selector deliberately out-specifies Tailwind's px-6/py-2.5
+   utilities on the same element (same trick as #nav-orders-btn below), so the
+   sizing holds even though the Tailwind CDN injects its styles at runtime. */
+#top > div {
+  padding: 12px 24px;
+  min-height: 85px;
+  align-items: center;
+}
+
+/* Order Summary drawer — fixed overlay panel (never pushes page content).
+   The panel is pinned to the viewport (top/right, full height) with a high
+   z-index + shadow so it slides IN OVER the catalog instead of resizing or
+   shifting .container / .catalog-grid. The main catalog stays fixed-width
+   and centered at all times because a fixed element is removed from normal
+   document flow. Width: 480px on desktop, capped at 90vw so phones still
+   show a dismissible margin. The ID selector out-specifies Tailwind's
+   max-w-sm utility on the markup, so this width holds at runtime. */
+#drawerPanel {
+  will-change: transform;
+  position: fixed;
+  top: 0;
+  right: 0;
+  /* Fixed-height flex column (the display:flex/flex-direction restatements of
+     the Tailwind classes on the markup are deliberate: they keep the drawer
+     laid out correctly even in the moment before the Tailwind CDN injects its
+     utilities, and ID specificity keeps them winning afterwards). Children:
+     header (shrink-0) + #drawerScrollBody (scrolls) + #checkoutSubmitBar
+     (sticky footer). The 100dvh fallback chain pins the bottom edge — and
+     therefore the submit bar — to the VISIBLE viewport on mobile browsers
+     whose dynamic toolbars make 100vh taller than the screen; browsers
+     without dvh support simply keep the 100vh line above. */
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  width: 480px;
+  max-width: 90vw;
+  overflow-y: auto;
+}
+
+/* Checkout drawer body (#drawerScrollBody in index.html) — everything between
+   the Order Summary header and the sticky submit bar.
+   - flex: 1 1 0% + min-height: 0 let the flex item SHRINK below its content
+     height, so THIS element (not #drawerPanel) becomes the scroll container.
+     Without min-height: 0 the item's automatic minimum size (= its content
+     height) would force the whole panel to scroll instead, dragging the
+     submit bar below the fold on mobile.
+   - overflow-y: auto makes the tall cart/customer/payment content scroll
+     inside the drawer.
+   - overscroll-behavior: contain stops scroll chaining from bouncing the
+     catalog page behind the drawer on touch screens. */
+#drawerScrollBody {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* "Place Order & Proceed" bar (#checkoutSubmitBar in index.html) — the
+   always-visible sticky footer of the checkout drawer.
+   - position: sticky + bottom: 0 pin the container to the bottom edge of the
+     drawer (relative to its scrollport) while #drawerScrollBody scrolls.
+   - background: white + z-index: 10 keep page/form content from showing
+     through or painting over the bar as content moves underneath it.
+   - flex-shrink: 0 stops the flex column from ever squeezing the bar out of
+     shape when the body is very tall.
+   - padding mirrors the p-4 utility on the markup (ID beats the class, but
+     the values are identical, so the rendered spacing is unchanged). */
+#checkoutSubmitBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  flex-shrink: 0;
+  background: #fff;
+  padding: 1rem;
+}
+
+/* Hide FAB when drawer/modals are open */
+body.drawer-open #backToTopBtn,
+body.modal-open #backToTopBtn,
+body.drawer-open #floating-cart-btn,
+body.modal-open #floating-cart-btn {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ----------------------------------------------------------------------------
+   Enlarged cart controls (tap-friendly on mobile & desktop)
+   - #floating-cart-btn: fixed 56x56 FAB with a 28px glyph so it is an easy
+     touch target; #floating-cart-badge scales up to a 22px pill with 14px bold
+     text (plus a white ring) so the count stays legible at a glance.
+   - #nav-orders-btn: the header's top-right cart/action button gets generous
+     padding and a 28px glyph (~52x52 total) so it is clearly visible.
+   These ID selectors deliberately out-specify the Tailwind utility classes on
+   the markup (the same trick used for the .delivery-zone-info .lucide sizing
+   below), so the sizing holds even though the Tailwind CDN injects its styles
+   at runtime.
+   ---------------------------------------------------------------------------- */
+#floating-cart-btn {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#floating-cart-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+#floating-cart-badge {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  border: 2px solid #ffffff;
+}
+
+#nav-orders-btn {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#nav-orders-btn svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* Hide native number input spinners (WebKit/Blink) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Cart toast: horizontally centered on all viewports */
+#cart-toast {
+  top: auto !important;
+  right: auto !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+/* Screen-reader-only utility for values that must remain queryable by JS
+   without appearing in the visible layout. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Product card titles: bold, dark, and readable at every size so long
+   microwavable names (e.g. "RE 1600 Rectangular Container") stay legible
+   on all screen sizes. The class selector out-specifies base heading
+   styles so this holds at runtime. */
+.product-card-title {
+  font-size: clamp(1.1rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.35;
+  color: #0f172a;
+}
+
+/* Product card image/placeholder caption: the placehold.co image text is
+   baked into a raster image and cannot be styled with CSS, so each card
+   also renders this DOM caption directly beneath its image. Bold/dark at
+   1.1rem–1.25rem so the product name (e.g. "RO 10 Round Container (10 oz)")
+   is easily readable on both desktop and mobile. */
+/* Product card media and image presentation:
+   For Cups and Lids (#productList), enlarged container height (h-64/h-72, 270px)
+   with object-contain and comfortable padding so the drinkware pictures appear
+   noticeably larger, sharper, and uncropped. */
+.product-card-media {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: #f8fafc;
+}
+
+#productList .product-card-media {
+  background-color: #f8fafc;
+}
+
+#productList .product-card-img {
+  height: 17rem; /* ~h-68 / 272px */
+  width: 100%;
+  object-fit: contain;
+  padding: 1rem;
+}
+
+#microwavableList .product-card-img {
+  height: 11rem;
+  width: 100%;
+  object-fit: contain;
+  padding: 0.75rem;
+  background-color: #ffffff;
+}
+
+.product-card-media-label {
+  display: block;
+  padding: 10px 20px 0;
+  font-size: clamp(1.1rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.4;
+  color: #0f172a;
+}
+
+/* Product card descriptions: consistent sizing (0.85rem–0.9rem) and line
+   spacing across cups, lids, and microwavable cards. The 0.85rem base with
+   a 1.6 line-height keeps two-line professional copy neat; cards with room
+   scale toward 0.9rem via clamp. The class selector out-specifies Tailwind's
+   text-sm utility on the same element so this holds at runtime. */
+.product-card-desc {
+  font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+  line-height: 1.6;
+}
+
+
+/* Externalized Styles */
+.contents-display {
+  display: contents;
+}
+
+.payment-option-group {
+  margin: 15px 0;
+}
+
+/* Delivery Method radio group — 3 fulfillment options: Lalamove Delivery
+   (We book for you), Customer Book (Buyer arranges Lalamove/Grab) and
+   Self Pick-up (Warehouse). */
+.delivery-method-group {
+  border: 0;
+  padding: 0;
+}
+
+.delivery-method-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.delivery-method-option:last-child {
+  margin-bottom: 0;
+}
+
+.delivery-method-option input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--brand-indigo);
+  cursor: pointer;
+}
+
+.delivery-method-text {
+  display: block;
+}
+
+.delivery-method-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e1e2f;
+}
+
+.delivery-method-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: #374151;
+}
+
+.payment-type-label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
+  color: #1e1e2f;
+}
+
+.payment-type-select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+}
+
+/* Payment Instructions box — Order Confirmation Modal + post-checkout Order
+   Placed modal. Holds the GCash QR code + Account Name / Number that
+   customers scan/copy before paying. (The Order Summary drawer intentionally
+   renders NO such box — see the NOTE in index.html / main.js.) */
+.payment-instructions-box .gcash-detail {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* GCash QR code image: prominently centered at the top of the Payment
+   Instructions box, square-ish and capped so it stays crisp on desktop
+   while max-width keeps it inside narrow mobile viewports. */
+.payment-instructions-box .gcash-qr-code {
+  display: block;
+  width: 208px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  margin: 4px auto 8px auto;
+  border-radius: 8px;
+}
+
+/* Lalamove location explainer container — "Why select your City / Location?"
+   banner directly above the City / Location dropdown.
+   main.js updateLalamoveGuideVisibility() toggles display block
+   (Lalamove Delivery) / none (Self-Booking) based on the Delivery Method
+   radios, synced on handleDeliveryMethodChange() + openCart(). */
+#lalamove-guide-container {
+  margin: 12px 0;
+}
+/* City / Location explainer — Lucide 'info' banner. Visibility is controlled
+   solely by the parent #lalamove-guide-container (display block/none). */
+.delivery-zone-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 16px 18px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+}
+
+.delivery-zone-info .lucide {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  color: #1d4ed8;
+}
+
+.delivery-zone-info-text {
+  display: block;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #1e3a8a;
+}
+
+.delivery-zone-info-text strong {
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.delivery-zone-info-text > strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.payment-breakdown {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  border: 1px solid #e2e8f0;
+}
+
+.breakdown-row {
+  margin: 4px 0;
+  color: #333;
+}
+
+.breakdown-row-secondary {
+  margin: 4px 0;
+  font-weight: 500;
+  color: #374151;
+}
+
+.due-now-amount {
+  color: #2b2672;
+  font-weight: bold;
+}
+
+.custom-alert-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 9999;
+  justify-content: center;
+  align-items: center;
+}
+
+.custom-alert-box {
+  background: #fff;
+  padding: 24px;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.custom-alert-title {
+  margin-top: 0;
+  color: #1e1e2f;
+}
+
+.custom-alert-message {
+  /* Semi-bold so alert text (e.g. the "upload your GCash proof" message shown
+     over the Confirm Order modal) stays highly legible. */
+  font-weight: 600;
+  color: #374151;
+  margin: 16px 0 24px;
+}
+
+.custom-alert-btn {
+  background: #2b2672;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  width: 100%;
+}
+
+/* Custom alert modal visibility (replaces inline style.display toggles) */
+#custom-alert-modal.is-open {
+  display: flex;
+}
+
+/* Cart drawer open/closed states (replaces inline style.transform toggles) */
+#drawerPanel.drawer-open-state {
+  transform: translateX(0) !important;
+}
+
+#drawerPanel.drawer-closed-state {
+  transform: translateX(100%) !important;
+}
+
+/* Cart drawer backdrop (#cartOverlay.cart-overlay)
+   - Sits above the page but BELOW the Order Summary panel (z-index 999 vs
+     1000), so the dimmed area is clickable while the panel keeps its own
+     events. Fixed + full-viewport so it always covers the page behind the
+     fixed panel, regardless of scroll position.
+   - pointer-events stays 'none' while the drawer is closed (the backdrop must
+     never block the page) and flips to 'auto' while it is open, which is what
+     makes "click outside the panel to dismiss" work.
+   - main.js attaches the click listener to this exact element. */
+#cartDrawer {
+  background-color: transparent;
+}
+
+.cart-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background-color: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+
+body.drawer-open .cart-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Fallback: while the drawer is open the container also blocks page clicks, so
+   its own listener can close the panel even if the overlay element is absent. */
+body.drawer-open #cartDrawer {
+  pointer-events: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Order Summary header actions (Clear All + Close) — Lucide icon buttons
+   --------------------------------------------------------------------------- */
+.drawer-action-btn,
+.drawer-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.drawer-action-btn {
+  padding: 7px 10px;
+}
+
+.drawer-icon-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.drawer-action-btn:hover,
+.drawer-icon-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.drawer-action-btn:focus-visible,
+.drawer-icon-btn:focus-visible {
+  outline: 2px solid var(--brand-indigo);
+  outline-offset: 1px;
+}
+
+/* Wholesale-only notice inside the Confirm Order modal (Lucide 'package'). */
+.wholesale-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* Lucide icons: keep the SVG from being squeezed inside flex rows. */
+.lucide {
+  flex-shrink: 0;
+}
+
+/* Cart toast positioning (replaces inline toast.style.* assignments) */
+#cart-toast.cart-toast-position {
+  top: auto !important;
+  right: auto !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}
+
+/* Checkout / confirmation conditional rows (replaces inline style.display toggles) */
+.is-hidden-row {
+  display: none !important;
+}
+
+.is-flex-row {
+  display: flex !important;
+}
+
+.is-block-row {
+  display: block !important;
+}
+
+/* Mobile Responsiveness & Accessibility */
+
+@media (max-width: 768px) {
+  /* -----------------------------------------------------------
+     Navigation Bar on Mobile: taller navbar, proportionally
+     sized logo, aligned nav items / mobile menu icon.
+     ----------------------------------------------------------- */
+
+  /* Navbar shell — 10px/24px padding (matching the desktop container rule
+     above) so the enlarged 55px mobile logo doesn't look squished and the
+     header gains height on mobile too. */
+  header,
+  header nav,
+  .navbar,
+  nav.navbar,
+  nav.site-nav {
+    padding: 10px 24px !important;
+  }
+
+  /* Logo size on mobile — clear and proportional. */
+  .navbar-brand img,
+  .logo img,
+  header .logo img,
+  #logo,
+  img#logo,
+  .site-logo img {
+    max-height: 36px !important;
+    width: auto !important;
+    height: auto !important;
+  }
+
+  /* Legacy navbar image logo (.nav-logo) on mobile — 55px so the "PACK & SIP"
+     text stays clear while fitting beside the cart button. Scoped to the
+     .nav-logo class only (NOT #siteLogo, which now lives on the hero image)
+     so it never overrides the .hero-logo sizing below. */
+  .nav-logo {
+    height: 55px !important;
+    max-height: none !important;
+    width: auto !important;
+  }
+
+  /* Navbar brand text on mobile — slightly smaller so it fits beside the
+     cart button with room to spare. */
+  .nav-brand-text {
+    font-size: 1.35rem !important;
+  }
+
+  /* Hero logo on mobile — keeps the centered 185px desktop sizing so the
+     mark stays prominent on small screens, capped at 60vw so it never
+     overflows narrow viewports. */
+  .hero-logo {
+    width: 185px !important;
+    max-width: 60vw !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Header row alignment — the container and its two groups (brand + links,
+     cart button) all center their children vertically, so the logo, links,
+     and cart icon sit perfectly centered inside the header on mobile. */
+  #top > div,
+  #top > div > div {
+    align-items: center !important;
+  }
+
+  /* Nav items — proper alignment and touch spacing. */
+  .navbar-nav,
+  header .navbar-nav,
+  nav .navbar-nav,
+  .nav-list,
+  .menu-items,
+  .nav-items {
+    align-items: center !important;
+  }
+
+  .navbar-nav li,
+  .nav-item,
+  .menu-item,
+  .nav-items > li {
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 4px !important;
+  }
+
+  .navbar-nav li a,
+  .nav-item a,
+  .menu-item a,
+  nav a:not(.btn) {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 8px 12px !important;
+    min-height: 44px;
+    line-height: 1.2 !important;
+  }
+
+  /* Hamburger / mobile menu icon — comfortable, aligned tap target. */
+  .navbar-toggler,
+  .mobile-menu-toggle,
+  .hamburger,
+  .menu-toggle,
+  button.navbar-toggler,
+  nav button.nav-toggle,
+  .nav-toggle-btn {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    padding: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .navbar-collapse,
+  .mobile-menu,
+  .nav-collapse {
+    align-items: center !important;
+  }
+
+  /* -----------------------------------------------------------
+     Order Summary Panel / Drawer on Mobile
+     ----------------------------------------------------------- */
+
+  /* Full-width drawer capped to the viewport on small screens: 90vw keeps a
+     dismissible margin so tapping outside still closes the fixed overlay. */
+  @media (max-width: 640px) {
+    #drawerPanel {
+      width: 480px !important;
+      max-width: 90vw !important;
+      border-radius: 0 !important;
+      box-sizing: border-box !important;
+      transform-origin: right center !important;
+    }
+  }
+
+  /* Internal vertical scrolling + padding so checkout fields and
+     buttons don't cut off or extend awkwardly. */
+  #drawerPanel {
+    overflow-y: auto !important;
+    max-height: 100vh !important;
+    padding: 16px 16px 24px !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+
+
+  /* Touch-friendly inputs and buttons */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  select,
+  textarea,
+  button,
+  .btn {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+
+  /* Touch-friendly checkout form controls on phones.
+     16px prevents iOS auto-zoom on focus; comfortable spacing between
+     labels, fields, and the Place Order button. */
+  @media (max-width: 640px) {
+    #drawerPanel input[type="text"],
+    #drawerPanel input[type="number"],
+    #drawerPanel input[type="email"],
+    #drawerPanel input[type="tel"],
+    #drawerPanel input[type="password"],
+    #drawerPanel select,
+    #drawerPanel textarea,
+    #drawerPanel .payment-type-select,
+    #drawerPanel button,
+    #drawerPanel .btn {
+      font-size: 16px !important;
+      min-height: 44px !important;
+      padding: 12px 14px !important;
+      box-sizing: border-box !important;
+    }
+
+    #drawerPanel label,
+    #drawerPanel .form-label,
+    #drawerPanel .control-label,
+    #drawerPanel .payment-type-label {
+      font-size: 16px !important;
+      line-height: 1.4 !important;
+      margin-bottom: 6px !important;
+    }
+
+    /* Comfortable vertical rhythm for form groups inside the drawer. */
+    #drawerPanel .payment-option-group,
+    #drawerPanel .delivery-method-group,
+    #drawerPanel .payment-breakdown {
+      margin-top: 12px !important;
+      margin-bottom: 12px !important;
+    }
+
+    /* "Place Order" button — full-width, large tap target. */
+    #drawerPanel .btn-primary,
+    #drawerPanel .btn--primary,
+    #drawerPanel button[type="submit"],
+    #drawerPanel .place-order-btn,
+    #drawerPanel .submit-order-btn,
+    #drawerPanel .custom-alert-btn {
+      display: block !important;
+      width: 100% !important;
+      min-height: 48px !important;
+      font-size: 16px !important;
+      padding: 14px 20px !important;
+      margin-top: 16px !important;
+      box-sizing: border-box !important;
+    }
+  }
+
+  .p-6 {
+    padding: 1rem !important;
+  }
+
+  #cart-toast {
+    bottom: 24px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+  }
+}
+
+/* ============================================================
+   Mobile responsive Order Summary panel (#drawerPanel)
+   Reduce padding and font sizes slightly so the panel takes up
+   less vertical height. The desktop-only restriction below hides
+   the whole page (and drawer) at <=768px, so this targets the
+   range up to 1024px — small windows and phones in "Desktop site"
+   mode (~980px viewport) — where the panel is actually rendered.
+   ============================================================ */
+@media (max-width: 1024px) {
+  #drawerPanel .p-4 {
+    padding: 0.75rem;
+  }
+
+  #drawerPanel .p-3 {
+    padding: 0.625rem;
+  }
+
+  #drawerPanel .text-lg {
+    font-size: 1rem;
+  }
+
+  #drawerPanel .text-sm {
+    font-size: 0.8125rem;
+  }
+
+  #drawerPanel .text-xs {
+    font-size: 0.6875rem;
+  }
+
+  #drawerPanel .delivery-method-hint {
+    font-size: 11px;
+  }
+
+  #drawerPanel .payment-option-group {
+    margin: 10px 0;
+  }
+
+  #drawerPanel .payment-breakdown {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  #drawerPanel .delivery-method-option {
+    padding: 8px;
+  }
+
+  /* Compact the header actions and the checkout footer so the panel's fixed
+     chrome costs less vertical space on short screens. */
+  #drawerPanel .drawer-action-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  #drawerPanel .drawer-icon-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Tighter cart line items + totals block inside the Order Summary. */
+  #cartContent .py-2 {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+  }
+
+  #cartContent .pt-3 {
+    padding-top: 0.5rem;
+  }
+
+  /* Tighter vertical spacing between the checkout fields. */
+  #customerForm > * + * {
+    margin-top: 0.5rem;
+  }
+}
+
+/* ============================================================
+   Mobile view restriction (desktop-only platform)
+   ============================================================ */
+
+/* Hidden by default; the media query below raises it on small screens */
+#mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(15, 23, 42, 0.94);
+  justify-content: center;
+  align-items: center;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+@media (max-width: 768px) {
+  header,
+  main,
+  footer,
+  #cartDrawer,
+  #drawerPanel,
+  #cart-toast,
+  #backToTopBtn,
+  #floating-cart-btn {
+    display: none !important;
+  }
+
+  /* Show the mobile restriction overlay */
+  #mobile-overlay {
+    display: flex !important;
+  }
+}
+
+/* ============================================================
+   Mobile: enlarged Payment Instructions (GCash details)
+   The Order Confirmation Modal's and the post-checkout Order
+   Placed modal's "Payment Instructions" / "GCash Payment
+   Details" box uses bigger text (1.1rem) and roomier padding on
+   phones/tablets so the GCash Account Name and Number are easy to
+   read and copy. 1024px also covers the phones that render the
+   site in "Desktop site" mode (~980px).
+
+   (The Order Summary drawer no longer renders a Payment
+   Instructions box — those details live ONLY in the Order
+   Confirmation Modal, beside the GCash proof upload field.)
+   ============================================================ */
+@media (max-width: 1024px) {
+  #confirmOrderModal .payment-instructions-box,
+  #orderPendingModal .payment-instructions-box {
+    padding: 16px 18px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* All copy inside the box scales up for readability. */
+  #confirmOrderModal .payment-instructions-box p,
+  #orderPendingModal .payment-instructions-box p {
+    font-size: 1.1rem !important;
+    line-height: 1.5 !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* GCash Account Name / Number — bold so they stand out for copying. */
+  #confirmOrderModal .payment-instructions-box .gcash-detail,
+  #confirmOrderModal .payment-instructions-box .gcash-detail strong,
+  #orderPendingModal .payment-instructions-box .gcash-detail,
+  #orderPendingModal .payment-instructions-box .gcash-detail strong {
+    font-weight: 700 !important;
+  }
+
+  /* Proof-of-payment hint: slightly smaller than the account details. */
+  #confirmOrderModal .payment-instructions-box .delivery-method-hint,
+  #orderPendingModal .payment-instructions-box .delivery-method-hint {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    line-height: 1.45 !important;
+  }
+}
+
+/* ============================================================
+   Mobile typography + readability (max-width: 768px)
+   NOTE: the desktop-only restriction above hides the main UI at
+   <=768px behind #mobile-overlay. This block still matters for
+   phones/tablets rendering the site in "Desktop site" mode and for
+   any future responsive layout — it enlarges body text, bolds key
+   labels/totals, and loosens line-height for small screens.
+   Placed AFTER the restriction block so its rules win in the
+   cascade (same specificity + later order, with !important where
+   Tailwind utilities or earlier max-width:1024px rules compete).
+   ============================================================ */
+@media (max-width: 768px) {
+  /* 1. Enlarge all mobile body text to ~18px. */
+  body {
+    font-size: 18px !important;
+    line-height: 1.6 !important;
+  }
+
+  body p,
+  body li,
+  body input,
+  body select,
+  body textarea,
+  body label,
+  #productList p,
+  #productList li,
+  #microwavableList p,
+  #microwavableList li,
+  .product-card-desc,
+  #cartContent p,
+  #cartContent li,
+  #drawerPanel p,
+  #drawerPanel li,
+  #drawerPanel input,
+  #drawerPanel select,
+  #drawerPanel textarea,
+  #drawerPanel label,
+  #confirmOrderModal p,
+  #confirmOrderModal li {
+    font-size: 18px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* 2a. Product titles + section headings: bold. */
+  .product-card-title,
+  .product-card-media-label,
+  .delivery-method-title,
+  .payment-type-label,
+  #drawerPanel .payment-type-label,
+  #drawerPanel label,
+  #cartDrawer h3,
+  #drawerPanel h3 {
+    font-weight: 700 !important;
+  }
+
+  .product-card-title,
+  .product-card-media-label {
+    font-size: 1.25rem !important;
+    line-height: 1.6 !important;
+  }
+
+  .delivery-method-title,
+  .payment-type-label {
+    font-size: 18px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* 2b. Order Summary totals + fee labels: bold. */
+  #cartContent .pt-3,
+  #cartContent .pt-3 > div,
+  #payment-breakdown,
+  .payment-breakdown,
+  .breakdown-row,
+  .breakdown-row strong,
+  .breakdown-row span,
+  #estimated-shipping-row,
+  #estimated-shipping-row strong,
+  #estimated-shipping-amount,
+  .breakdown-row-secondary,
+  .breakdown-row-secondary strong,
+  #remaining-balance-row,
+  #remaining-balance-row strong,
+  #remaining-balance-amount,
+  .due-now-amount,
+  #due-now-amount {
+    font-weight: 700 !important;
+    font-size: 18px !important;
+    line-height: 1.6 !important;
+  }
+
+  /* 2c. City / Location explainer heading: bold + slightly enlarged. */
+  .delivery-zone-info-text > strong {
+    font-weight: 700 !important;
+    font-size: 1.15rem !important;
+    line-height: 1.6 !important;
+  }
+
+  /* 3. Readability: roomier line-height for explainer + hints. */
+  .delivery-zone-info-text,
+  .delivery-zone-info-text span,
+  .delivery-method-hint,
+  #drawerPanel .delivery-method-hint,
+  .product-card-desc {
+    line-height: 1.6 !important;
+  }
+
+  .delivery-method-hint,
+  #drawerPanel .delivery-method-hint {
+    font-size: 18px !important;
+  }
+
+  /* 3b. Inputs, selects, and product name tags stay tappable + readable. */
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="password"],
+  select,
+  textarea,
+  .payment-type-select,
+  #drawerPanel input,
+  #drawerPanel select,
+  #drawerPanel textarea,
+  #drawerPanel .payment-type-select {
+    font-size: 18px !important;
+    line-height: 1.6 !important;
+    min-height: 48px !important;
+    padding: 12px 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  .product-card-media-label {
+    padding: 12px 16px 0 !important;
+  }
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #1e293b !important;
+  caret-color: #1e293b;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ============================================================
+   Order Confirmation Modal — wider, roomier layout
+   (#confirmOrderModal / #confirmOrderPanel in index.html)
+
+   The panel used to rely solely on Tailwind's max-w-md (448px).
+   It is now 650px wide on desktop and every internal block scales
+   with it: the order-items summary, the delivery/payment detail
+   rows, the Payment Instructions box, the GCash proof upload
+   field and the two action buttons.
+
+   The ID selector (#confirmOrderPanel) out-specifies Tailwind's
+   .max-w-md / .p-6 utilities, so this width + padding hold at
+   runtime regardless of stylesheet order (same approach as
+   #drawerPanel above). max-width uses min() so the modal stays
+   fully responsive and never exceeds the viewport.
+   ============================================================ */
+#confirmOrderModal #confirmOrderPanel {
+  width: 100%;
+  /* 650px on desktop; on phones / "Desktop site" width it shrinks to the
+     available space (100% of the overlay's padded content box). */
+  max-width: min(650px, 100%);
+  padding: 28px 32px;
+  box-sizing: border-box;
+  /* Short laptop/landscape screens: the panel scrolls internally so the
+     "Add More Items" / "Yes, Place Order" buttons stay reachable. */
+  max-height: 92vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Order items summary (#confirmOrderItems): roomier breathing room in the
+   wider container. */
+#confirmOrderModal #confirmOrderItems {
+  padding: 18px 20px;
+}
+
+/* Delivery details + payment/total rows share one vertical rhythm so the
+   wider rows never look cramped or misaligned. */
+#confirmOrderModal .confirm-order-row {
+  gap: 16px;
+  min-height: 28px;
+}
+
+/* Payment Instructions box + GCash proof upload field: consistent inner
+   padding at the wider size (the max-width:1024px block below reuses the
+   same 16px/18px values for touch screens). */
+#confirmOrderModal .payment-instructions-box,
+#confirmOrderModal #confirmOrderProofBox {
+  padding: 16px 18px;
+}
+
+/* Action buttons: fill the wider grid evenly with taller tap targets. */
+#confirmOrderModal #confirmOrderActions {
+  gap: 14px;
+  margin-top: 26px;
+}
+
+#confirmOrderModal #confirmOrderActions > button {
+  min-height: 48px;
+  padding: 12px 18px;
+}
+
+/* ------------------------------------------------------------
+   Responsive steps
+   ------------------------------------------------------------ */
+/* Tablets / phones (incl. "Desktop site" mode at ~980px): go full-width
+   inside the overlay's p-4 and tighten the outer padding so no horizontal
+   scrolling is ever introduced. */
+@media (max-width: 1024px) {
+  #confirmOrderModal #confirmOrderPanel {
+    max-width: 100%;
+    padding: 22px 20px;
+  }
+
+  #confirmOrderModal .confirm-order-row {
+    gap: 12px;
+  }
+}
+
+/* Small phones: compact padding and a single-column button stack so the
+   two actions stay comfortably tappable. */
+@media (max-width: 480px) {
+  #confirmOrderModal #confirmOrderPanel {
+    padding: 18px 16px;
+  }
+
+  #confirmOrderModal #confirmOrderItems,
+  #confirmOrderModal .payment-instructions-box,
+  #confirmOrderModal #confirmOrderProofBox {
+    padding: 14px;
+  }
+
+  #confirmOrderModal #confirmOrderActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================
+   Order Confirmation Modal — small-text legibility
+   (#confirmOrderModal)
+
+   Every smaller body/description text inside the modal is raised to
+   ~0.95rem (15px) with a semi-bold (600) weight so the notes, the
+   address details, the payment instructions, the upload status and
+   the amber notices stay clearly readable inside the wider panel.
+
+   Nothing is ever SHRUNK: the rule only targets copy that is
+   currently 12px (text-xs), 14px (text-sm / .gcash-detail) or 12px
+   (.delivery-method-hint / .wholesale-notice). The ID-led selectors
+   out-specify Tailwind's .text-xs / .text-sm utilities, so the sizes
+   hold regardless of stylesheet order. Headings, the lead paragraph
+   and the Total figure keep their larger sizes.
+   ============================================================ */
+#confirmOrderModal #confirmOrderItems,
+#confirmOrderModal .confirm-order-row,
+#confirmOrderModal #confirmOrderPaymentNote,
+#confirmOrderModal #confirmOrderProofNote,
+#confirmOrderModal #confirmOrderAddressRow,
+#confirmOrderModal #gcashProofStatus,
+#confirmOrderModal #confirmOrderOperatingHours,
+#confirmOrderModal #confirmOrderReservationNote,
+#confirmOrderModal .wholesale-notice,
+#confirmOrderModal #confirmOrderProofBox label,
+#confirmOrderModal .payment-instructions-box .gcash-detail,
+#confirmOrderModal .payment-instructions-box .delivery-method-hint {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Total row: the headline figure keeps its full 1rem size while matching the
+   semi-bold rhythm of the detail rows around it. */
+#confirmOrderModal #confirmOrderTotalRow {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+/* Lead paragraph ("Is this everything you'd like to order?") — already 1rem,
+   given the same semi-bold weight so the whole modal reads consistently. */
+#confirmOrderModal #confirmOrderSubtitle {
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* The GCash account name / number stay the boldest copy in the box. */
+#confirmOrderModal .payment-instructions-box .gcash-detail strong {
+  font-weight: 700;
+}
+
+/* Upload-field status / validation message: the red error state (added by
+   main.js) is emphasized so an invalid/missing proof is unmistakable. */
+#confirmOrderModal #gcashProofStatus {
+  font-weight: 600;
+}
+
+#confirmOrderModal #gcashProofStatus.text-red-600 {
+  font-weight: 700;
+}

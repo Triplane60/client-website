@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Google Search Console ownership verification -->
+  <meta name="google-site-verification" content="ujNXAZoEhmq-5zjum3G5cghk9K5vHyodbT5pPkUX_qg" />
+  <title>Pack &amp; Sip | Wholesale Disposable Cups &amp; Lids Supplier</title>
+  <meta name="description" content="Order B2B wholesale disposable cups, lids, and packaging solutions with fast delivery in Metro Manila." />
+  <link rel="canonical" href="{{ canonical_url }}" />
+  <!-- Open Graph tags for social sharing; the absolute URL is resolved from the
+       request host (or SITE_URL) so free domains and custom domains both work. -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Pack &amp; Sip" />
+  <meta property="og:title" content="Pack &amp; Sip | Wholesale Disposable Cups &amp; Lids Supplier" />
+  <meta property="og:description" content="Order B2B wholesale disposable cups, lids, and packaging solutions with fast delivery in Metro Manila." />
+  <meta property="og:url" content="{{ canonical_url }}" />
+  <meta property="og:locale" content="en_PH" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Pack &amp; Sip | Wholesale Disposable Cups &amp; Lids Supplier" />
+  <meta name="twitter:description" content="Order B2B wholesale disposable cups, lids, and packaging solutions with fast delivery in Metro Manila." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide icons (version-pinned UMD build) power the Order Summary and
+       Confirm Order UI. main.js calls lucide.createIcons() again whenever it
+       injects new markup; a blocked CDN only costs the icons, never ordering. -->
+  <script src="https://unpkg.com/lucide@1.47.0/dist/umd/lucide.min.js" defer></script>
+  <!-- Brand favicon: favicon.png is the one logo file shipped with the app —
+       the Pack & Sip artwork contain-fitted into a strict 1:1 square canvas
+       with transparent padding (the file-level equivalent of object-fit:
+       contain in a square container). It therefore drives BOTH the browser tab
+       icon below AND the hero brand mark in the page body, and renders crisp
+       and square — undistorted — on desktop and mobile browsers. -->
+  <link rel="icon" type="image/png" sizes="512x512" href="favicon.png">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <!-- Mobile view restriction: this platform is desktop-only -->
+  <div id="mobile-overlay" class="fixed inset-0 hidden items-center justify-center" role="alertdialog" aria-modal="true" aria-labelledby="mobileOverlayTitle" tabindex="-1">
+    <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl text-center">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg></div>
+      <h2 id="mobileOverlayTitle" class="mt-4 text-xl font-bold text-slate-900">Desktop Site Required</h2>
+      <p class="mt-2 text-sm font-medium leading-6 text-slate-700">
+        Pack &amp; Sip is a desktop-only ordering platform. Switch your mobile browser to
+        <em class="text-indigo-700 font-semibold">&ldquo;Desktop site&rdquo;</em> mode, or open the platform on a
+        desktop computer.
+      </p>
+
+      <h3 class="mt-4 text-sm font-semibold text-slate-700">Enable &ldquo;Desktop site&rdquo; in 3 steps:</h3>
+      <ol class="mt-2 text-left text-sm text-slate-700 list-decimal space-y-1.5">
+        <li>Open your browser&rsquo;s <strong>menu</strong> &mdash; tap the <strong>⋮ / ≡</strong> icon in the top-right corner.</li>
+        <li>Check the <strong>&ldquo;Desktop site&rdquo;</strong> option (also labeled &ldquo;Request desktop website&rdquo; on some browsers).</li>
+        <li>The page reloads automatically &mdash; if it doesn&rsquo;t, refresh it manually.</li>
+      </ol>
+
+      <p class="mt-3 text-xs font-medium text-slate-700">No browser menu? Open this platform on any desktop computer or laptop instead.</p>
+    </div>
+  </div>
+
+  <header id="top" class="bg-white shadow">
+    <!-- Container padding mirrors the #top > div rule in styles.css
+         (padding: 12px 24px; min-height: 85px) so the "Pack & Sip
+         Wholesale" brand text and the "About" / "Login / Register" links
+         stay vertically centered in a spacious bar. -->
+    <div class="max-w-6xl mx-auto px-6 py-2.5 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <!-- Navbar brand: styled text (replaces the logo image, which now lives
+             in the hero banner above "Wholesale Boxes of Cups & Lids"). It is
+             intentionally non-clickable: no link and no click/double-click
+             handler is attached to #siteBrand (see main.js). -->
+        <span id="siteBrand" class="nav-brand-text">Pack <span class="nav-brand-amp">&amp;</span> Sip<span class="nav-brand-sub">Wholesale</span></span>
+        <nav class="hidden md:flex items-center gap-6 text-sm font-medium text-slate-700">
+          <a href="#about" id="aboutLink" class="hover:text-slate-900">About</a>
+          <button id="authBtn" class="hover:text-slate-900">Login / Register</button>
+          <button id="logoutBtn" class="hidden hover:text-slate-900">Logout</button>
+        </nav>
+
+      </div>
+      <div class="flex items-center gap-4">
+        <button id="nav-orders-btn" onclick="handleNavOrdersClick()" aria-label="Order History" title="Order History" class="p-3 bg-indigo-600 text-white rounded-lg shadow-sm transition-all hover:bg-indigo-700"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7">
+  <path d="m7.5 4.27 9 5.15"/>
+  <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+  <path d="m3.3 7 8.7 5 8.7-5"/>
+  <path d="M12 22V12"/>
+</svg></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-6">
+    <!-- Live order totals: kept out of sight because the cart drawer renders
+         the visible Order Summary from these values. -->
+    <div class="sr-only" aria-hidden="true">
+      <div id="subtotal">₱0.00</div>
+      <div id="shipping">₱0.00</div>
+      <div id="total">₱0.00</div>
+    </div>
+    <section id="configurator" class="bg-gradient-to-r from-indigo-50 to-slate-50 rounded-lg p-8 flex flex-col md:flex-row items-center gap-8">
+      <div class="flex-1 hero-copy">
+        <!-- Hero brand logo: official mark centered above the main heading for
+             a strong visual identity (moved here from the navbar). Uses the
+             single brand file favicon.png (the square 1:1 artwork that also
+             powers the browser tab icon), sized at 185px wide via .hero-logo in
+             styles.css. Keeps id="siteLogo" so the double-click admin shortcut
+             in main.js keeps working. -->
+        <img id="siteLogo" class="hero-logo" src="favicon.png" alt="Pack &amp; Sip logo" loading="lazy" decoding="async" onerror="this.onerror=null;this.style.display='none';" />
+        <!-- Hero / main app banner: local photography (static/app.webp, with a
+             root-level app.webp copy as fallback). Hidden automatically if the
+             file is missing so the hero text layout never breaks. -->
+        <img id="heroBanner" class="hero-banner" src="static/app.webp" alt="Pack &amp; Sip wholesale disposable cups, lids and containers" loading="lazy" decoding="async" onerror="if(!this.dataset.triedRoot){this.dataset.triedRoot='1';this.src='app.webp';}else{this.style.display='none';}" />
+        <h1 class="text-3xl font-extrabold text-slate-900">Wholesale Boxes of Cups, Lids &amp; Microwavable Containers</h1>
+        <p class="mt-4 text-slate-700">High-volume eco-friendly disposable drinkware and food containers powered by Dabba and GoUp. Direct warehouse pricing for food businesses and events.</p>
+        <ul class="mt-4 text-sm font-medium text-slate-700">
+          <li>• Boxes contain 1,250 units each</li>
+          <li>• Lalamove courier delivery from our Taguig warehouse</li>
+        </ul>
+      </div>
+      <div class="w-full md:w-1/3 bg-white rounded-lg shadow p-5">
+        <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Wholesale Benefits &amp; Quick Delivery</p>
+        <h3 class="mt-1 text-lg font-semibold text-slate-800">Why order from Pack &amp; Sip?</h3>
+        <ul class="mt-4 space-y-3 text-sm">
+          <li class="flex items-start gap-3 rounded-md bg-slate-50 p-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span>
+            <span>
+              <strong class="block text-slate-900">Lalamove Express Delivery</strong>
+              <span class="font-medium text-slate-700">Dispatched from Taguig City</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3 rounded-md bg-slate-50 p-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
+            <span>
+              <strong class="block text-slate-900">Bulk Packaging</strong>
+              <span class="font-medium text-slate-700">1,250 units sealed per box</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3 rounded-md bg-slate-50 p-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>
+            <span>
+              <strong class="block text-slate-900">B2B Wholesale Rates</strong>
+              <span class="font-medium text-slate-700">Direct warehouse pricing for authentic Dabba packaging products.</span>
+            </span>
+          </li>
+          <li class="flex items-start gap-3 rounded-md bg-slate-50 p-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <span>
+              <strong class="block text-slate-900">Flexible Booking Options</strong>
+              <span class="font-medium text-slate-700">Need full delivery control? During checkout you can choose Customer Book to send your own Lalamove/Grab rider, or Self Pick-up to collect directly at our Bagumbayan, Taguig warehouse!</span>
+            </span>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="catalog" class="mt-8">
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Bulk essentials</p>
+          <h2 class="text-2xl font-semibold">Catalog</h2>
+        </div>
+        <div class="flex items-center gap-4">
+          <p class="hidden sm:block text-sm font-medium text-slate-700">Boxes of 1,250 units</p>
+        </div>
+      </div>
+      <div id="productList" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4"></div>
+    </section>
+
+    <section id="microwavable" class="mt-10">
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">Meal prep essentials</p>
+          <h2 class="text-2xl font-semibold">Microwavable Containers</h2>
+        </div>
+        <p class="hidden sm:block text-sm font-medium text-slate-700">Bulk boxes of 10</p>
+      </div>
+      <!-- Microwavable cards are injected by main.js renderCatalog() in INCREASING
+           size/capacity order (RO 10 -> RO 16 -> RO 30, then RE 500 -> RE 750
+           -> RE 1000 -> RE 1600 -> RE 2500 -> RE 3200, with RE 1250 / RE 1450
+           / RE 1650 slotting in by capacity if added) via compareMicrowavableAsc.
+           Do not hardcode product cards here; keep that ascending sequence.
+           Image mapping (main.js getProductImage(), all rendered with
+           object-contain so photos never distort):
+             RO 10 Round Container -> ro10.jpg (static/ro10.jpg mirror)
+             RO 16 Round Container -> ro16.jpg (static/ro16.jpg mirror)
+             RO 30 Round Container -> ro30.jpg (static/ro30.jpg mirror)
+             RE 500 Rectangular Container -> re500.jpg (static/re500.jpg mirror)
+             RE 750 Rectangular Container -> re750.jpg (static/re750.jpg mirror)
+             RE 1000 Rectangular Container -> re1000.jpg (static/re1000.jpg mirror)
+             RE 1600 Rectangular Container -> re1600.jpg (static/re1600.jpg mirror)
+             RE 2500 Rectangular Container -> re2500.jpg (static/re2500.jpg mirror) -->
+      <div id="microwavableList" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4"></div>
+    </section>
+
+  </main>
+
+  <button id="backToTopBtn" onclick="scrollToTop(event)" class="fixed bottom-6 right-6 bg-indigo-600 text-white p-3 rounded-full shadow-lg hidden hover:bg-indigo-700 transition-all z-40" aria-label="Back to top"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></svg></button>
+
+  <!-- Fixed floating cart button (sits just left of the scroll-to-top button) -->
+  <button id="floating-cart-btn" onclick="openCartModal()" class="fixed bottom-6 right-20 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-2xl transition-all hover:bg-indigo-700 z-40" aria-label="Open cart"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7">
+  <circle cx="8" cy="21" r="1"/>
+  <circle cx="19" cy="21" r="1"/>
+  <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
+</svg><span id="floating-cart-badge" class="absolute -top-2 -right-2 flex h-[22px] min-w-[22px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1.5 text-sm font-bold leading-none text-white">0</span></button>
+
+  <!-- Pending order modal: shown by main.js showOrderPendingModal() once the
+       order has been saved by /api/checkout. Formatted as a GCash payment /
+       Order Invoice summary: the amount due captured at submit time, the GCash
+       wallet details (pushed by renderGcashInstructions into
+       #pendingGcashAccountName / #pendingGcashAccountNumber), and the
+       screenshot + SMS reminder with the customer's phone number (#modalPhone). -->
+  <div id="orderPendingModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-900/60 p-4 opacity-0 transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="orderPendingTitle">
+    <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl transition-transform duration-300">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7"><path d="M20 6 9 17l-5-5"/></svg></div>
+      <h2 id="orderPendingTitle" class="mt-4 text-center text-2xl font-bold text-slate-900">Order Placed &amp; Pending Payment</h2>
+      <p class="mt-2 text-center text-sm font-medium leading-6 text-slate-700">
+        Your order was saved successfully. Send your GCash payment using the details below so we can process and dispatch it.
+      </p>
+
+      <!-- Order invoice summary: Total Amount, the Amount Due now (50%
+           downpayment or the full payment), and the balance settled on
+           delivery / pick-up (row hidden for full payment). -->
+      <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-left">
+        <p class="payment-type-label">Order Invoice</p>
+        <div class="mt-2 flex items-center justify-between text-sm text-slate-600">
+          <span>Total Amount</span>
+          <span id="pendingOrderTotal" class="font-semibold text-slate-900">₱0.00</span>
+        </div>
+        <div id="pendingOrderDueRow" class="is-flex-row mt-2 items-center justify-between border-t border-slate-200 pt-2 text-sm font-bold text-amber-700">
+          <span id="pendingOrderDueLabel">Amount Due (50% Downpayment)</span>
+          <span id="pendingOrderAmountDue">₱0.00</span>
+        </div>
+        <div id="pendingOrderBalanceRow" class="is-flex-row mt-2 items-center justify-between text-sm text-slate-600">
+          <span>Balance upon Delivery / Pick-up</span>
+          <span id="pendingOrderBalance" class="font-semibold text-slate-800">₱0.00</span>
+        </div>
+      </div>
+
+      <!-- GCash Payment Details: single wallet mirrored in the checkout drawer
+           and the Confirm Order modal. -->
+      <div class="payment-instructions-box mt-3 space-y-1.5 rounded-lg border border-slate-300 p-3 text-left">
+        <p class="payment-type-label">GCash Payment Details</p>
+        <p class="gcash-detail text-sm text-slate-700">Account Name: <strong id="pendingGcashAccountName">JE****N ER***T E.</strong></p>
+        <p class="gcash-detail text-sm text-slate-700">GCash Number: <strong id="pendingGcashAccountNumber">0966 745 3719</strong></p>
+        <p class="delivery-method-hint">Please send payment via GCash to the account listed below.</p>
+      </div>
+
+      <!-- Reminder: Lucide 'camera' icon for the payment screenshot, plus the
+           SMS confirmation the customer receives on their phone number. -->
+      <p class="mt-3 flex items-start gap-2 text-left text-xs font-medium leading-5 text-slate-600">
+        <i data-lucide="camera" class="mt-0.5 h-3.5 w-3.5 shrink-0 text-indigo-600" aria-hidden="true"></i>
+        <span>Please take a screenshot of your GCash payment reference. An SMS confirmation will also be sent to <span id="modalPhone" class="font-semibold text-slate-900"></span>.</span>
+      </p>
+
+      <button id="closeModalBtn" type="button" class="mt-6 w-full rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-700">Done</button>
+    </div>
+  </div>
+
+  <!-- Order confirmation modal -->
+  <div id="confirmOrderModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="confirmOrderTitle">
+    <!-- Wider panel: #confirmOrderPanel in styles.css sets max-width: 650px
+         (out-specifying the Tailwind max-w-md fallback) with roomier padding,
+         a 92vh max-height and internal scrolling on short screens. -->
+    <div id="confirmOrderPanel" class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+      <div class="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-100 text-indigo-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></div>
+      <h2 id="confirmOrderTitle" class="mt-4 text-2xl font-bold text-slate-900">Confirm Your Order</h2>
+      <p id="confirmOrderSubtitle" class="mt-2 text-slate-600">Is this everything you'd like to order?</p>
+      <!-- Wholesale-only notice: Lucide 'package' icon + by-the-box reminder. -->
+      <div class="wholesale-notice" role="note">
+        <i data-lucide="package" class="h-4 w-4" aria-hidden="true"></i>
+        <span>Note: We only sell by boxes and not by retail.</span>
+      </div>
+      <div id="confirmOrderItems" class="mt-5 space-y-2 rounded-lg bg-slate-50 p-4 text-sm text-slate-700"></div>
+      <div id="confirmOrderTotalRow" class="confirm-order-row mt-4 flex items-center justify-between border-t border-slate-200 pt-4 font-bold text-slate-900">
+        <span>Total</span>
+        <span id="confirmOrderTotal">₱0.00</span>
+      </div>
+      <div class="confirm-order-row mt-2 flex items-center justify-between text-sm text-slate-600">
+        <span>Delivery Method</span>
+        <span id="confirmOrderDeliveryMethod" class="font-semibold text-slate-800">Lalamove Delivery</span>
+      </div>
+      <div class="confirm-order-row mt-2 flex items-center justify-between text-sm text-slate-600">
+        <span>Delivery Area</span>
+        <span id="confirmOrderDeliveryZone" class="font-semibold text-slate-800">—</span>
+      </div>
+      <!-- Address line: warehouse Pick-up Address + Contact (Lucide 'map-pin')
+           when Customer Book or Self Pick-up is selected, otherwise the
+           customer's Shipping Address (hidden when empty). Populated by main.js. -->
+      <div class="mt-3 flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-700 is-hidden-row" id="confirmOrderAddressRow">
+        <i data-lucide="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" aria-hidden="true"></i>
+        <span class="flex flex-col gap-1">
+          <span id="confirmOrderAddressText"></span>
+          <span id="confirmOrderContactText" class="font-semibold text-slate-800">Contact Number: [Insert Phone Number Here]</span>
+        </span>
+      </div>
+      <div class="confirm-order-row mt-2 flex items-center justify-between text-sm font-semibold text-amber-700" id="confirmOrderFullRow">
+        <span>Required Payment</span>
+        <span id="confirmOrderRequiredPayment">₱0.00</span>
+      </div>
+      <div class="confirm-order-row mt-2 flex items-center justify-between text-sm font-semibold text-amber-700" id="confirmOrderDownpaymentRow">
+        <span>Required 50% Downpayment</span>
+        <span id="confirmOrderDownpayment">₱0.00</span>
+      </div>
+      <p id="confirmOrderPaymentNote" class="mt-4 text-xs leading-5 text-slate-500">A 50% downpayment is required via GCash to process your order. The remaining balance will be paid upon Lalamove delivery.</p>
+      <!-- Payment instructions: Lucide 'camera' for the proof-of-payment note. -->
+      <p id="confirmOrderProofNote" class="mt-2 flex items-start gap-2 text-xs leading-5 text-slate-600">
+        <i data-lucide="camera" class="mt-0.5 h-3.5 w-3.5 text-indigo-600" aria-hidden="true"></i>
+        <span>After paying, please save your payment screenshot or reference number for verification.</span>
+      </p>
+      <!-- Payment Instructions: GCash QR + wallet shown in the Order
+           Confirmation Modal so customers can scan or copy the account
+           details before confirming. Values are pushed by main.js
+           (renderGcashInstructions) and mirror the checkout drawer values. -->
+      <div class="payment-instructions-box mt-3 rounded-lg border border-slate-300 p-3 space-y-1.5 text-left">
+        <p class="payment-type-label">Payment Instructions</p>
+        <img src="qr%20code.jpg" alt="GCash QR Code — JE****N ER***T E." class="gcash-qr-code mx-auto block w-52 max-w-full rounded-lg border border-slate-200 object-contain" loading="lazy" decoding="async" />
+        <p class="gcash-detail text-center">Account Name: <strong id="confirmGcashAccountName">JE****N ER***T E.</strong></p>
+        <p class="gcash-detail">GCash Number: <strong id="confirmGcashAccountNumber">0966 745 3719</strong></p>
+        <p class="delivery-method-hint">Please send payment via GCash to the account listed below (scan the QR code or send to the number).</p>
+      </div>
+      <!-- GCash proof of payment: REQUIRED screenshot upload shown directly
+           below the Payment Instructions. main.js keeps "Yes, Place Order"
+           (#confirmOrderBtn) disabled until a valid image is attached here.
+           The GCash reference number below is OPTIONAL (blank defaults to
+           "N/A (QR Payment)"), then posts both to /api/checkout as the
+           multipart fields "gcash_proof" + "gcash_ref". -->
+      <div id="confirmOrderProofBox" class="mt-3 rounded-lg border border-slate-300 p-3 text-left">
+        <label for="gcashProofInput" class="block text-sm font-semibold text-slate-700">
+          Upload GCash Payment Screenshot / Proof <span class="text-red-600" aria-hidden="true">*</span>
+        </label>
+        <input id="gcashProofInput" name="gcash_proof" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required
+               class="mt-2 block w-full cursor-pointer rounded-md border border-slate-300 bg-white p-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100" />
+        <p id="gcashProofStatus" class="mt-2 text-xs leading-5 text-slate-500">No file selected yet. Please attach your GCash payment screenshot (JPG, PNG or WEBP only).</p>
+        <!-- Dynamic thumbnail preview — hidden until a valid image is chosen. -->
+        <div id="gcashProofPreview" class="mt-2 hidden">
+          <img id="gcashProofPreviewImg" alt="GCash payment proof preview" class="max-h-40 w-auto rounded-md border border-slate-200" />
+        </div>
+        <label for="gcashRefInput" class="mt-3 block text-sm font-semibold text-slate-700">
+          GCash Reference Number (Optional)
+        </label>
+        <input id="gcashRefInput" name="gcash_ref" type="text" inputmode="numeric" autocomplete="off" maxlength="13" placeholder="e.g. 1234567890123"
+               class="mt-2 block w-full rounded-md border border-slate-300 bg-white p-2 text-sm tracking-widest text-slate-800 placeholder:tracking-normal placeholder:text-slate-400" />
+        <p id="gcashRefStatus" class="mt-1 text-xs leading-5 text-slate-500">Pwede mong iwanang blanko kung nag-scan ka gamit ang QR Code.</p>
+      </div>
+      <!-- Operating hours (always shown) + the City-based payment reservation
+           window, which main.js refreshes from the selected City / Location. -->
+      <div class="mt-3 rounded-md border border-amber-100 bg-amber-50 p-2.5 text-xs leading-5 text-amber-800">
+        <p id="confirmOrderOperatingHours" class="flex items-start gap-2">
+          <i data-lucide="clock" class="mt-0.5 h-3.5 w-3.5" aria-hidden="true"></i>
+          <span>Operating hours: 7:00 AM – 7:00 PM daily. Orders confirmed after 7:00 PM are dispatched the next morning.</span>
+        </p>
+        <p id="confirmOrderReservationNote" class="mt-1"></p>
+      </div>
+      <div id="confirmOrderActions" class="mt-6 grid grid-cols-2 gap-3">
+        <button id="addMoreItemsBtn" type="button" class="rounded-md border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50">Add More Items</button>
+        <!-- Locked until a valid GCash proof image is attached (main.js
+             setConfirmOrderButtonEnabled toggles disabled/aria-disabled). -->
+        <button id="confirmOrderBtn" type="button" class="rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-slate-300" disabled aria-disabled="true">Yes, Place Order</button>
+      </div>
+    </div>
+  </div>
+
+    <!-- Auth Modal -->
+  <div id="authModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true">
+    <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+
+
+      <div class="flex items-center justify-between border-b pb-4">
+        <div class="flex gap-4">
+          <button id="tabLogin" type="button" class="text-lg font-bold border-b-2 border-indigo-600 text-indigo-600">Login</button>
+          <button id="tabRegister" type="button" class="text-lg font-bold border-b-2 border-transparent text-slate-500">Register</button>
+        </div>
+        <button id="closeAuth" type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label="Close Login Modal">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]" aria-hidden="true">
+            <path d="M18 6 6 18"/>
+            <path d="m6 6 12 12"/>
+          </svg>
+        </button>
+      </div>
+
+
+            <!-- Login Form -->
+      <form id="loginForm" autocomplete="off" class="mt-6 space-y-4">
+        <div>
+          <label for="loginEmail" class="block text-sm font-medium text-slate-700">Email Address</label>
+          <input type="email" id="loginEmail" name="email" autocomplete="off" required title="Email Address" class="w-full border rounded-md p-2 mt-1" />
+        </div>
+        <div>
+          <!-- Password label row: "Forgot Password?" sits flush-right above the input -->
+          <div class="flex items-center justify-between gap-2">
+            <label for="loginPassword" class="block text-sm font-medium text-slate-700">Password</label>
+            <button id="forgotPasswordBtn" type="button" class="text-xs text-indigo-600 transition hover:underline">Forgot Password?</button>
+          </div>
+          <input type="password" id="loginPassword" name="password" autocomplete="off" required maxlength="20" title="Password" class="w-full border rounded-md p-2 mt-1" />
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-md font-semibold hover:bg-indigo-700">Login</button>
+      </form>
+
+      <!-- Register Form -->
+      <form id="registerForm" action="/register" method="POST" autocomplete="off" class="mt-6 space-y-4 hidden">
+        <div>
+          <label for="registerName" class="block text-sm font-medium text-slate-700">Full Name</label>
+          <input type="text" id="registerName" name="full_name" autocomplete="off" required title="Full Name" class="w-full border rounded-md p-2 mt-1" />
+        </div>
+        <div>
+          <label for="registerEmail" class="block text-sm font-medium text-slate-700">Email Address</label>
+          <input type="email" id="registerEmail" name="email" autocomplete="off" required title="Email Address" class="w-full border rounded-md p-2 mt-1" />
+        </div>
+        <div>
+          <label for="registerPassword" class="block text-sm font-medium text-slate-700">Password</label>
+          <input type="password" id="registerPassword" name="password" autocomplete="off" required minlength="8" maxlength="20" title="Password" class="w-full border rounded-md p-2 mt-1" />
+          <p class="text-xs font-medium text-slate-700 mt-1">Minimum 8 characters</p>
+        </div>
+        <div>
+          <label for="registerPhone" class="block text-sm font-medium text-slate-700">Phone Number</label>
+          <input type="tel" id="registerPhone" name="phone" placeholder="09123456789" maxlength="11" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '');" title="Phone Number" class="w-full border rounded-md p-2 mt-1" />
+        </div>
+        <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-md font-semibold hover:bg-indigo-700">Create Account</button>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Forgot Password Modal -->
+  <div id="forgot-password-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="forgotPasswordTitle">
+    <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div class="flex items-center justify-between border-b pb-4">
+        <div class="flex items-center gap-2">
+          <!-- Back to the Login / Register modal -->
+          <button type="button" id="backToAuthBtn" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label="Back to Login / Register" title="Back to Login / Register">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5" aria-hidden="true">
+              <path d="m12 19-7-7 7-7"/>
+              <path d="M19 12H5"/>
+            </svg>
+          </button>
+          <h2 id="forgotPasswordTitle" class="text-lg font-bold text-slate-900">Reset your password</h2>
+        </div>
+        <button type="button" id="closeForgotPassword" class="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label="Close Forgot Password Modal"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <p class="mt-3 text-sm font-medium text-slate-700">Enter the email address on your account, then choose a new password.</p>
+      <form id="forgotPasswordForm" autocomplete="off" class="mt-6 space-y-4">
+        <div>
+          <label for="resetEmail" class="block text-sm font-medium text-slate-700">Email Address</label>
+          <input type="email" id="resetEmail" name="email" autocomplete="off" required title="Email Address" class="w-full border rounded-md p-2 mt-1" />
+        </div>
+        <div>
+          <label for="resetNewPassword" class="block text-sm font-medium text-slate-700">New Password</label>
+          <input type="password" id="resetNewPassword" name="new_password" autocomplete="off" required minlength="8" maxlength="20" title="New Password" class="w-full border rounded-md p-2 mt-1" />
+          <p class="text-xs font-medium text-slate-700 mt-1">Minimum 8 characters</p>
+        </div>
+        <p id="forgotPasswordError" class="hidden text-sm font-medium text-red-600" role="alert"></p>
+        <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-md font-semibold hover:bg-indigo-700">Reset Password</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- About modal -->
+
+  <div id="aboutModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="aboutTitle">
+    <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-semibold uppercase tracking-wide text-indigo-600">About Pack & Sip</p>
+          <h2 id="aboutTitle" class="mt-1 text-2xl font-bold text-slate-900">Drinkware built for busy teams.</h2>
+        </div>
+        <button id="closeAbout" type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label="Close About Us"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <p class="mt-4 font-medium text-slate-700">Pack & Sip is an eco-friendly wholesale provider of disposable cups and lids for cafes, caterers, events, and growing businesses.</p>
+      <div class="mt-5 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-md bg-slate-50 p-3"><strong class="block text-slate-900">Eco-minded</strong><span class="text-sm font-medium text-slate-700">Practical drinkware for lower-waste service.</span></div>
+        <div class="rounded-md bg-slate-50 p-3"><strong class="block text-slate-900">Fast delivery</strong><span class="text-sm font-medium text-slate-700">Reliable fulfillment for your next rush.</span></div>
+        <div class="rounded-md bg-slate-50 p-3"><strong class="block text-slate-900">Bulk support</strong><span class="text-sm font-medium text-slate-700">Simple ordering by the box or by volume.</span></div>
+      </div>
+    </div>
+  </div>
+
+    <!-- Customer Orders Modal -->
+  <div id="customer-orders-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4" role="dialog" aria-modal="true" aria-labelledby="customerOrdersTitle">
+    <div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+      <div class="flex items-center justify-between border-b pb-4">
+        <h2 id="customerOrdersTitle" class="text-lg font-bold text-slate-900">My Orders</h2>
+        <button id="closeCustomerOrders" type="button" class="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" aria-label="Close Orders Modal"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div id="customer-orders-list" class="mt-5 space-y-3">
+        <p class="text-sm font-medium text-slate-700">Your orders will appear here.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Account recommendation modal for guests viewing order history -->
+  <div id="accountNudgeModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-900/60 p-4" role="dialog" aria-modal="true" aria-labelledby="accountNudgeTitle">
+    <div class="w-full max-w-md rounded-xl bg-white p-6 text-center shadow-2xl">
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-indigo-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+      <h2 id="accountNudgeTitle" class="mt-4 text-2xl font-bold text-slate-900">Track orders faster</h2>
+      <p class="mt-3 text-sm leading-6 text-slate-600">Create an account or Log in to easily track your orders, view order history, and enjoy faster checkouts!</p>
+      <div class="mt-6 grid grid-cols-2 gap-3">
+        <button id="accountNudgeLoginBtn" type="button" class="rounded-md border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50">Log In</button>
+        <button id="accountNudgeRegisterBtn" type="button" class="rounded-md bg-indigo-600 px-4 py-2 font-semibold text-white transition hover:bg-indigo-700">Create Account</button>
+      </div>
+      <button id="accountNudgeDismissBtn" type="button" class="mt-3 w-full rounded-md px-4 py-2 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700">Continue as Guest</button>
+    </div>
+  </div>
+
+    <!-- Cart Drawer -->
+  <div id="cartDrawer" class="fixed inset-0 flex justify-end pointer-events-none">
+    <!-- Dimmed backdrop behind the Order Summary panel. This element owns the
+         click-to-dismiss behaviour: tapping/clicking anywhere outside the panel
+         closes it (see .cart-overlay in styles.css and the listener in main.js).
+         It sits at z-index 1, below the panel (z-index 2), and only accepts
+         pointer events while the drawer is open. -->
+    <div id="cartOverlay" class="cart-overlay" aria-hidden="true"></div>
+    <div id="drawerPanel" class="max-w-sm w-full bg-white shadow-xl transform translate-x-full pointer-events-auto transition-transform duration-300 flex flex-col drawer-closed-state" aria-hidden="true">
+            <div class="p-4 flex items-center justify-between gap-2 border-b shrink-0">
+        <h3 class="text-lg font-semibold">Order Summary</h3>
+        <div class="flex items-center gap-1.5">
+          <button id="clearCartBtn" type="button" class="drawer-action-btn" title="Reset every item quantity to 0" aria-label="Clear all items in the cart">
+            <i data-lucide="trash-2" class="h-4 w-4" aria-hidden="true"></i>
+            <span>Clear All</span>
+          </button>
+          <button id="closeCart" type="button" class="drawer-icon-btn" title="Close order summary" aria-label="Close cart summary">
+            <i data-lucide="x" class="h-4 w-4" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+
+            <form id="checkoutForm" action="/checkout" method="POST" novalidate autocomplete="off" class="contents-display">
+        <!-- Scrollable drawer body: everything between the Order Summary header
+             and the sticky submit bar. styles.css pins it as the flex child that
+             scrolls (overflow-y: auto) so the Place Order button below never
+             moves out of view. -->
+        <div class="flex-1 overflow-y-auto" id="drawerScrollBody">
+          <div class="p-4" id="cartContent">
+            <p class="text-sm font-medium text-slate-700">No items in cart.</p>
+          </div>
+          <div class="p-4 border-t space-y-2.5" id="customerForm">
+            <!-- Customer details, top to bottom:
+                 1. Full Name  2. Phone Number  3. Shipping Address (shown for
+                 Lalamove Delivery)  4. City / Location (shown for Lalamove
+                 Delivery). Shipping Address and City / Location are restored
+                 in this drawer and toggled dynamically by
+                 updateDeliveryFieldsVisibility() in main.js: VISIBLE when
+                 "Lalamove Delivery (We book for you)" is selected, HIDDEN for
+                 the default "Customer Book" and "Self Pick-up (Warehouse)".
+                 Full Name leads the form (who is ordering); the phone follows
+                 directly below it and stays the primary contact channel — an SMS
+                 order update is sent to it. Required, digits only, PH mobile
+                 format 09123456789. -->
+            <div class="border border-slate-300 rounded-lg p-3 space-y-2.5">
+              <label for="customerName" class="block text-sm font-medium text-slate-700">Full Name</label>
+              <input id="customerName" name="name" type="text" autocomplete="off" required title="Full Name" class="w-full rounded-md border-gray-200 p-1.5" />
+            </div>
+            <div class="border border-slate-300 rounded-lg p-3 space-y-2.5">
+              <label for="customerPhone" class="block text-sm font-medium text-slate-700">Phone Number</label>
+              <input type="tel" id="customerPhone" name="phone" placeholder="09123456789" maxlength="11" pattern="09[0-9]{9}" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '');" required title="Phone Number" class="w-full rounded-md border-gray-200 p-1.5" />
+            </div>
+            <div class="border border-slate-300 rounded-lg p-3 space-y-2.5 hidden" id="deliveryAddressFields" aria-hidden="true" style="display:none;">
+              <label for="customerAddress" class="block text-sm font-medium text-slate-700">Shipping Address</label>
+              <textarea id="customerAddress" name="address" autocomplete="off" title="Shipping Address" class="w-full rounded-md border-gray-200 p-1.5" rows="2"></textarea>
+            </div>
+            <!-- City / Location: shown ONLY for Lalamove Delivery (We book for
+                 you). main.js updateDeliveryFieldsVisibility() hides this whole
+                 section (aria-hidden + .hidden) for Customer Book / Self
+                 Pick-up — no courier fee or payment reservation window applies
+                 there, so the picker and its explanatory notes only add form
+                 clutter. The options (zone id, base rate + reservation window)
+                 come from app.py LALAMOVE_ZONE_OPTIONS so the storefront and
+                 the server always agree. -->
+            <div class="border border-slate-300 rounded-lg p-3 space-y-2.5 hidden" id="deliveryZoneFields" aria-hidden="true" style="display:none;">
+              <!-- Blue tip box: itemized Lalamove shipping fee per City / Location
+                   zone, rendered directly above the dropdown. main.js
+                   updateLalamoveGuideVisibility() (called from
+                   updateDeliveryFieldsVisibility()) shows it together with the
+                   Shipping Address + City / Location fields for Lalamove
+                   Delivery (We book for you) and hides it for Customer Book /
+                   Self Pick-up. The rates mirror app.py LALAMOVE_ZONE_OPTIONS
+                   (origin: Taguig) so the tip box, the <option data-rate>
+                   values and the server always agree. -->
+              <div id="lalamove-guide-container" aria-hidden="true" style="display:none;" class="hidden">
+                <div class="delivery-zone-info" role="note">
+                  <i data-lucide="info" aria-hidden="true"></i>
+                  <div class="delivery-zone-info-text">
+                    <strong>Shipping Fee per City / Location</strong>
+                    <span>Your City / Location sets the Lalamove base rate from our Taguig warehouse (box quantities add a small per-box surcharge):</span>
+                    <span class="block"><strong>Taguig City</strong> — ₱60.00</span>
+                    <span class="block"><strong>Neighboring Cities</strong> (Makati, Pasig, Pateros) — ₱90.00</span>
+                    <span class="block"><strong>Rest of Metro Manila</strong> — ₱150.00</span>
+                    <span class="block"><strong>Nearby Provinces</strong> (Rizal, Cavite, Laguna, Bulacan) — ₱280.00</span>
+                    <span class="block"><strong>Outer Provincial</strong> — ₱450.00</span>
+                  </div>
+                </div>
+              </div>
+              <label for="deliveryZone" class="block text-sm font-medium text-slate-700">City / Location</label>
+              <select id="deliveryZone" name="delivery_zone" onchange="calculate()" title="City / Location — Lalamove shipping origin: Taguig" class="payment-type-select" tabindex="-1">
+                <option value="" disabled>Select your city / area</option>
+                {% for zone in lalamove_zones %}
+                <option value="{{ zone.id }}" data-rate="{{ '%.2f'|format(zone.rate) }}" data-short="{{ zone.short }}" data-reservation="{{ zone.reservation_minutes }}">{{ zone.label }} — ₱{{ '%.2f'|format(zone.rate) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Fulfillment: 3 distinct choices —
+                 1. Lalamove Delivery (We book for you): we arrange the booking,
+                    fee paid upon receipt or added to invoice (needs address + zone).
+                 2. Customer Book (Buyer arranges Lalamove/Grab): you book your
+                    preferred courier; warehouse address & contact sent on confirmation.
+                 3. Self Pick-up (Warehouse): pick up directly at Bagumbayan, Taguig. -->
+            <fieldset class="payment-option-group delivery-method-group">
+              <legend class="payment-type-label">Fulfillment</legend>
+              <label class="delivery-method-option" for="deliveryMethodStandard">
+                <input type="radio" id="deliveryMethodStandard" name="delivery_method" value="standard" onchange="handleDeliveryMethodChange()" title="Fulfillment: Lalamove Delivery (We book for you)" />
+                <span class="delivery-method-text">
+                  <span class="delivery-method-title">Lalamove Delivery (We book for you)</span>
+                  <span class="delivery-method-hint">We will arrange the booking. Delivery fee is paid upon receipt or added to invoice.</span>
+                </span>
+              </label>
+              <label class="delivery-method-option" for="deliveryMethodSelfBooking">
+                <input type="radio" id="deliveryMethodSelfBooking" name="delivery_method" value="self_booking" checked onchange="handleDeliveryMethodChange()" />
+                <span class="delivery-method-text">
+                  <span class="delivery-method-title">Customer Book (Buyer arranges Lalamove/Grab)</span>
+                  <span class="delivery-method-hint">You will book your preferred courier. We will send the warehouse pick-up address &amp; contact number upon order confirmation.</span>
+                </span>
+              </label>
+              <label class="delivery-method-option" for="deliveryMethodSelfPickup">
+                <input type="radio" id="deliveryMethodSelfPickup" name="delivery_method" value="self_pickup" onchange="handleDeliveryMethodChange()" title="Fulfillment: Self Pick-up (Warehouse)" />
+                <span class="delivery-method-text">
+                  <span class="delivery-method-title">Self Pick-up (Warehouse)</span>
+                  <span class="delivery-method-hint">Pick up directly at our warehouse in Bagumbayan, Taguig.</span>
+                </span>
+              </label>
+            </fieldset>
+
+            <div class="payment-option-group">
+              <label for="payment-type-select" class="payment-type-label">Payment Option</label>
+              <select id="payment-type-select" name="payment_type" onchange="updateCheckoutTotals()" title="Payment Option" class="payment-type-select">
+                <option value="50_percent">50% Downpayment (Balance on Delivery)</option>
+                <option value="full" selected>100% Full Payment</option>
+              </select>
+            </div>
+
+            <div id="payment-breakdown" class="payment-breakdown">
+              <!-- Estimated Shipping Fee line item in the Order Summary breakdown
+                   box, shown above Amount Due Now / Balance upon Delivery.
+                   ₱0.00 for Customer Book / Self Pick-up (Warehouse) — no courier
+                   fee is ever added — or the live Lalamove courier estimate when
+                   Lalamove Delivery (We book for you) is selected. main.js
+                   refreshes the value in updateCheckoutTotals() on every
+                   calculation. -->
+              <p class="breakdown-row" id="estimated-shipping-row"><strong>Estimated Shipping Fee:</strong> <span id="estimated-shipping-amount">₱0.00</span></p>
+
+              <p class="breakdown-row"><strong>Amount Due Now:</strong> <span id="due-now-amount" class="due-now-amount">₱0.00</span></p>
+              <p class="breakdown-row-secondary" id="remaining-balance-row"><strong>Balance upon Delivery:</strong> <span id="remaining-balance-amount">₱0.00</span></p>
+            </div>
+
+            <!-- NOTE: The Payment Instructions (GCash account details) box was
+                 intentionally REMOVED from this Order Summary drawer. Those
+                 details now live ONLY in the "Confirm Your Order" modal, right
+                 above the required GCash proof upload field (main.js
+                 renderGcashInstructions pushes the values into #confirmGcash*). -->
+
+            <!-- Cart payload hidden fields; populated by main.js before submission -->
+            <input type="hidden" id="checkoutCupId" name="cup_id" value="" title="Checkout cup ID" />
+            <input type="hidden" id="checkoutCupSize" name="cup_size" value="" title="Checkout cup size" />
+            <input type="hidden" id="checkoutCupBoxes" name="cup_boxes" value="0" title="Checkout cup boxes" />
+            <input type="hidden" id="checkoutLidId" name="lid_id" value="" title="Checkout lid ID" />
+            <input type="hidden" id="checkoutLidStyle" name="lid_style" value="" title="Checkout lid style" />
+            <input type="hidden" id="checkoutLidBoxes" name="lid_boxes" value="0" title="Checkout lid boxes" />
+            <input type="hidden" id="checkoutMicrowavableId" name="microwavable_id" value="" title="Checkout microwavable ID" />
+            <input type="hidden" id="checkoutMicrowavableSize" name="microwavable_size" value="" title="Checkout microwavable size" />
+            <input type="hidden" id="checkoutMicrowavableBoxes" name="microwavable_boxes" value="0" title="Checkout microwavable boxes" />
+            <input type="hidden" id="checkoutHasLargeCups" name="has_large_cups" value="0" title="Checkout has 16oz or 22oz cups" />
+            <input type="hidden" id="checkoutSmallCupBoxes" name="small_cup_boxes" value="0" title="Checkout 12oz cup boxes" />
+            <input type="hidden" id="checkoutLargeCupBoxes" name="large_cup_boxes" value="0" title="Checkout 16oz/22oz cup boxes" />
+            <input type="hidden" id="checkoutSubtotal" name="subtotal" value="0" title="Checkout subtotal" />
+            <input type="hidden" id="checkoutShipping" name="shipping" value="0" title="Checkout shipping" />
+            <input type="hidden" id="checkoutTotal" name="total" value="0" title="Checkout total" />
+            <input type="hidden" id="checkoutDueNow" name="due_now" value="0" title="Checkout amount due now" />
+            <input type="hidden" id="checkoutRemainingBalance" name="remaining_balance" value="0" title="Checkout remaining balance" />
+          </div>
+        </div>
+
+        <!-- Sticky submit bar: pinned to the bottom of the drawer (see
+             #checkoutSubmitBar in styles.css) so "Place Order & Proceed" is
+             permanently visible without scrolling to the end of the form.
+             GUEST CHECKOUT: clicking it always opens the "Confirm Your Order"
+             modal directly — #authModal (Login / Register) is intentionally
+             never triggered from this checkout flow (main.js). -->
+        <div class="p-4 border-t sticky bottom-0 bg-white" id="checkoutSubmitBar">
+          <button id="checkoutBtn" type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-md disabled:bg-slate-300 disabled:cursor-not-allowed disabled:opacity-60" disabled aria-disabled="true">Place Order & Proceed</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <footer class="bg-gray-900 text-gray-300 pt-12 pb-8 mt-16">
+    <div class="max-w-6xl mx-auto px-6">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div>
+          <h2 class="text-xl font-bold text-white">Pack &amp; Sip</h2>
+          <p class="mt-3 text-sm leading-6 text-gray-400">High-volume, eco-friendly disposable drinkware solutions</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <span class="rounded-full border border-gray-700 px-3 py-1 text-xs">1,250 Units/Box</span>
+            <span class="rounded-full border border-gray-700 px-3 py-1 text-xs">Bulk Pricing</span>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-white">Navigation</h3>
+          <nav class="mt-3 flex flex-col gap-2 text-sm">
+            <a href="#catalog" class="text-gray-400 transition hover:text-white">Catalog</a>
+            <a href="#about" class="text-gray-400 transition hover:text-white">About</a>
+            <!-- Root-relative aliased admin route: renders the staff-only
+                 manage-orders-ps.html template via Flask on both desktop and
+                 mobile browsers (no 404 from missing manage-orders.html). -->
+            <a href="/manage-orders" class="text-gray-400 transition hover:text-white">Store Management</a>
+          </nav>
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-white">Contact Us</h3>
+          <div class="mt-3 space-y-2 text-sm text-gray-400">
+            <p class="block">+63 928 181 5599</p>
+            <p class="block">jambyletesa@gmail.com</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-10 border-t border-gray-800 pt-5 text-xs text-gray-500">
+        <p>&copy; <span id="copyrightYear"></span> Pack &amp; Sip. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+        <div id="custom-alert-modal" class="custom-alert-overlay">
+    <div class="custom-alert-box">
+      <h3 class="custom-alert-title">Notice</h3>
+      <p id="custom-alert-message" class="custom-alert-message"></p>
+      <button onclick="closeCustomAlert()" class="custom-alert-btn">OK</button>
+    </div>
+  </div>
+
+
+  <script src="main.js" defer></script>
+
+  <script>
+    document.getElementById('copyrightYear').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
