@@ -155,59 +155,6 @@ function compareMicrowavableAsc(a, b){
   return String(a.name || '').localeCompare(String(b.name || ''));
 }
 
-function getProductImageFallback(product){
-  const label = product.type === 'cup' ? `${product.size} Cup` : product.type === 'lid' ? `${product.style} Lid` : `${product.name}`;
-  const background = product.type === 'cup' ? 'e0e7ff' : product.type === 'lid' ? 'f1f5f9' : 'ecfdf5';
-  const foreground = product.type === 'cup' ? '3730a3' : product.type === 'lid' ? '334155' : '047857';
-  return `https://placehold.co/640x300/${background}/${foreground}?text=${encodeURIComponent(label)}`;
-}
-
-// Local product photography (served from the project root with ./static/ copies
-// as backup — Flask's /<path:filename> handler serves both). Cups/lids map to
-// their .webp files; microwavable containers map to their exact newly uploaded
-// .jpg files (ro10/ro16/ro30 + re500/re750/re1000/re1600/re2500). Anything
-// without a photo falls back to the placehold.co placeholder via
-// getProductImageFallback().
-function getProductImage(product){
-  const type = String(product.type || '').trim().toLowerCase();
-  const id = String(product.id || '').trim().toLowerCase();
-  const size = String(product.size || '').trim().toLowerCase();
-  const style = String(product.style || '').trim().toLowerCase();
-  const name = String(product.name || '').trim().toLowerCase();
-
-  // Microwavable Containers -> exact uploaded file paths (root-level copies,
-  // also reachable as static/<file> when mirrored into ./static/).
-  // Matched by stable product id first, then by name/size so API/DB renames
-  // still resolve to the right photo.
-  if(type === 'microwavable' || id.startsWith('container-')){
-    if(id === 'container-ro-10' || /\bro\s*10\b/.test(name) || size === '10oz') return 'ro10.jpg';
-    if(id === 'container-ro-16' || /\bro\s*16\b/.test(name) || size === '16oz') return 'ro16.jpg';
-    if(id === 'container-ro-30' || /\bro\s*30\b/.test(name) || size === '30oz') return 'ro30.jpg';
-    if(id === 'container-re-500' || /\bre\s*500\b/.test(name) || size === '500ml') return 're500.jpg';
-    if(id === 'container-re-750' || /\bre\s*750\b/.test(name) || size === '750ml') return 're750.jpg';
-    if(id === 'container-re-1000' || /\bre\s*1000\b/.test(name) || size === '1,000ml' || size === '1000ml') return 're1000.jpg';
-    if(id === 'container-re-1600' || /\bre\s*1600\b/.test(name) || size === '1,600ml' || size === '1600ml') return 're1600.jpg';
-    if(id === 'container-re-2500' || /\bre\s*2500\b/.test(name) || size === '2,500ml' || size === '2500ml') return 're2500.jpg';
-    return getProductImageFallback(product);
-  }
-
-  // Ensure other non-cup/lid items never use cup or lid photos
-  if(type !== 'cup' && type !== 'lid'){
-    return getProductImageFallback(product);
-  }
-  if(type === 'cup' || id.startsWith('cup-')){
-    if(id === 'cup-12oz' || size === '12oz') return 'static/12oz.webp';
-    if(id === 'cup-16oz' || size === '16oz') return 'static/16oz.webp';
-    if(id === 'cup-22oz' || size === '22oz') return 'static/22oz.webp';
-  }
-  if(type === 'lid' || id.startsWith('lid-')){
-    if(id === 'lid-dome' || style === 'dome') return 'static/dome.webp';
-    if(id === 'lid-flat' || style === 'flat') return 'static/flat.webp';
-    if(id === 'lid-strawless' || style === 'strawless') return 'static/strawless.webp';
-  }
-  return getProductImageFallback(product);
-}
-
 function renderCatalog(){
   const list = document.getElementById('productList');
   const microwavableList = document.getElementById('microwavableList');
@@ -225,6 +172,10 @@ function renderCatalog(){
   const others = PRODUCTS.filter(p => p.type !== 'microwavable');
   const orderedProducts = [...others, ...microwavables];
 
+  // Cards render text + price only: the catalog intentionally shows NO product
+  // photos (the former <figure class="product-card-media"> image block was
+  // removed together with its getProductImage()/getProductImageFallback()
+  // helpers). Keep the card markup free of <img> tags.
   orderedProducts.forEach(product => {
     const card = document.createElement('article');
     const stock = Number(product.stock_boxes || 0);
@@ -236,15 +187,11 @@ function renderCatalog(){
     card.className = 'flex flex-col justify-between overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm';
     card.innerHTML = `
       <div>
-        <div class="flex items-start justify-between gap-3 p-5 pb-3">
+        <div class="flex items-start justify-between gap-3 p-5 pb-2">
           <h3 class="product-card-title font-semibold text-slate-900">${product.name}</h3>
           <span class="shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${stockClasses}">${stockLabel}</span>
         </div>
-        <figure class="product-card-media">
-          <img src="${getProductImage(product)}" data-fallback="${getProductImageFallback(product)}" alt="${product.name} preview" class="product-card-img ${product.type === 'microwavable' ? 'h-44 object-contain p-3' : 'h-64 sm:h-72 object-contain p-3'} w-full" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=this.dataset.fallback;" />
-          <figcaption class="product-card-media-label">${product.name}</figcaption>
-        </figure>
-        <div class="p-5 pt-4">
+        <div class="p-5 pt-3">
           <p class="product-card-desc text-sm font-medium text-slate-700">${product.description}</p>
           ${product.type === 'microwavable' ? `<p class="mt-1 text-xs font-medium text-slate-500">(Box of 10) — boxes of 10 units</p>` : ''}
           <div class="mt-4 flex items-end justify-between gap-3">
@@ -307,9 +254,6 @@ function resetConfigurator(){
   selectedMicrowavableId = null;
   Object.keys(qtys).forEach(id => delete qtys[id]);
   updateConfiguratorActionState();
-  // Clearing the cart also clears the City / Location selection, so the next
-  // order starts from an explicit location choice again.
-  resetDeliveryZone();
   resetDeliveryMethod();
   updateDeliveryFieldsVisibility(true);
   syncCategoryTotals();
@@ -552,13 +496,15 @@ async function calculate(){
   });
   subtotal = Math.round(subtotal * 100) / 100;
 
-  // Lalamove Delivery (origin: Taguig) = destination base rate + cup/lid box
-  // surcharges; the FULL fee always applies (even for 50% downpayment).
-  // Microwavables add neither a base rate nor a surcharge.
+  // Lalamove Delivery (origin: Taguig) = base rate + cup/lid box surcharges;
+  // the FULL fee always applies (even for 50% downpayment). Microwavables add
+  // neither a base rate nor a surcharge.
   // Fulfillment (cart checkout flow):
-  //   'standard'     -> Lalamove Delivery (We book for you): local courier
-  //     fee from the selected City / Location (#deliveryZone) + cup/lid box
-  //     surcharges.
+  //   'standard'     -> Lalamove Delivery (We book for you): local courier fee
+  //     (warehouse base rate + cup/lid box surcharges). The City / Location
+  //     picker was removed from the checkout panel, so the fee always uses the
+  //     default warehouse zone — exactly the amount app.py stores and charges
+  //     when no "delivery_zone" is submitted.
   //   'self_booking' -> Customer Book: Shipping Fee is always P0.00; you book
   //     your preferred courier.
   //   'self_pickup'  -> Self Pick-up (Warehouse): Shipping Fee is always
@@ -569,10 +515,8 @@ async function calculate(){
     ? SELF_PICKUP_SHIPPING_LABEL
     : SELF_BOOKING_SHIPPING_LABEL;
   const totals = getCategoryTotals();
-  const deliveryZone = getSelectedDeliveryZone();
-  const hasZone = deliveryZone !== '';
   const quote = getLalamoveShipping(totals.cupBoxes, totals.lidBoxes);
-  const shipping = (subtotal > 0 && !pickupMethod && hasZone) ? quote.fee : 0;
+  const shipping = (subtotal > 0 && !pickupMethod) ? quote.fee : 0;
   const shippingLabel = subtotal <= 0
     ? '—'
     : (pickupMethod ? pickupLabel : quote.label);
@@ -582,12 +526,9 @@ async function calculate(){
     subtotal,
     shipping,
     shippingLabel,
-    // Breakdown note only applies to the Lalamove option with a chosen area.
-    shippingBreakdown: (!pickupMethod && hasZone && subtotal > 0) ? lalamoveBreakdownText(quote) : '',
-    needsZone: (!pickupMethod && !hasZone && subtotal > 0),
+    // Breakdown note only applies to the Lalamove option (courier fee).
+    shippingBreakdown: (!pickupMethod && subtotal > 0) ? lalamoveBreakdownText(quote) : '',
     deliveryMethod,
-    deliveryZone,
-    deliveryZoneLabel: hasZone ? quote.zoneLabel : '',
     total,
     items
   });
@@ -642,17 +583,17 @@ function fulfillmentNote(method){
   if(method === DELIVERY_METHOD_SELF_BOOKING) return SELF_BOOKING_NOTE;
   return '';
 }
-// Warehouse pick-up address shown in the Confirm Order modal when the
-// Customer Book or Self Pick-up (Warehouse) option is selected.
-const WAREHOUSE_PICKUP_ADDRESS = '175 M.L.Q. St., Bagumbayan, Taguig City';
-// Warehouse contact number shown directly below the Pick-up Address in the
-// Confirm Order modal whenever Customer Book / Self Pick-up is rendered.
-const WAREHOUSE_CONTACT_NUMBER = '0928 181 5599';
+// NOTE: The warehouse Pick-up Address and Contact Number are intentionally NOT
+// displayed anywhere in the storefront (including the Confirm Order modal for
+// Customer Book / Self Pick-up). Customers receive those details from our team
+// after the order is confirmed.
 
 // ---------------------------------------------------------------------------
-// Lalamove local courier shipping (origin: Taguig City). The destination base
-// rate is read from the selected #deliveryZone option, which app.py renders
-// from LALAMOVE_ZONE_OPTIONS so the estimate can never drift from the API.
+// Lalamove local courier shipping (origin: Taguig City). The base rate comes
+// from the selected #deliveryZone option whenever that picker is rendered
+// (app.py draws its options from LALAMOVE_ZONE_OPTIONS); otherwise it falls
+// back to DELIVERY_ZONE_FALLBACK below, which mirrors app.py's
+// LALAMOVE_DEFAULT_ZONE so the estimate can never drift from the API.
 //   Total Shipping Fee = Base Location Rate + Cup Surcharge + Lid Surcharge
 //   Cups: 5 + (cupBoxes - 1) * 2      Lids: 3 + (lidBoxes - 1) * 2
 // Microwavables add neither a base rate nor a surcharge.
@@ -663,14 +604,22 @@ const CUP_BOX_SURCHARGE_ADDITIONAL = 2;
 const LID_BOX_SURCHARGE_FIRST = 3;
 const LID_BOX_SURCHARGE_ADDITIONAL = 2;
 
+// The checkout panel no longer renders the City / Location picker
+// (#deliveryZone), so the courier fee is always quoted from this default
+// warehouse zone. It mirrors app.py LALAMOVE_DEFAULT_ZONE /
+// LALAMOVE_ZONE_OPTIONS[0] (Taguig City: ₱60.00 base rate, 30-minute payment
+// reservation window) — exactly what the server stores and charges when a
+// checkout submits no "delivery_zone". If the picker is ever restored, its own
+// <option data-rate> value takes precedence again.
+const DELIVERY_ZONE_FALLBACK = {
+  id: 'taguig_city',
+  short: 'Taguig City',
+  rate: 60.0,
+  reservationMinutes: 30
+};
+
 function getDeliveryZoneSelect(){
   return document.getElementById('deliveryZone');
-}
-
-// Selected zone id ('' while the customer has not picked a city yet).
-function getSelectedDeliveryZone(){
-  const select = getDeliveryZoneSelect();
-  return select ? String(select.value || '') : '';
 }
 
 // Compact zone label of the selected option: prefers the option's data-short
@@ -685,12 +634,15 @@ function deliveryZoneLabel(){
   return String(option.textContent || '').split(' — ')[0].trim();
 }
 
-// Destination base rate comes straight from the rendered <option data-rate>.
+// Base rate: the rendered <option data-rate> when the City / Location picker
+// exists, otherwise the default warehouse zone rate (DELIVERY_ZONE_FALLBACK).
 function deliveryZoneRate(){
   const select = getDeliveryZoneSelect();
-  if(!select || !select.selectedOptions || select.selectedOptions.length === 0) return 0;
+  if(!select || !select.selectedOptions || select.selectedOptions.length === 0){
+    return DELIVERY_ZONE_FALLBACK.rate;
+  }
   const rate = parseFloat(select.selectedOptions[0].dataset.rate || '');
-  return Number.isFinite(rate) ? rate : 0;
+  return Number.isFinite(rate) ? rate : DELIVERY_ZONE_FALLBACK.rate;
 }
 
 // Dynamic payment reservation limit per City / Location. Mirrors app.py
@@ -706,12 +658,15 @@ function reservationWindowLabel(minutes){
   return `${total} minutes`;
 }
 
-// Reservation window (minutes) from the selected option's data-reservation.
+// Reservation window (minutes): the selected option's data-reservation, or the
+// default warehouse zone window when no City / Location picker is rendered.
 function selectedZoneReservationMinutes(){
   const select = getDeliveryZoneSelect();
-  if(!select || !select.selectedOptions || select.selectedOptions.length === 0) return 0;
+  if(!select || !select.selectedOptions || select.selectedOptions.length === 0){
+    return DELIVERY_ZONE_FALLBACK.reservationMinutes;
+  }
   const minutes = parseInt(select.selectedOptions[0].dataset.reservation || '', 10);
-  return Number.isFinite(minutes) ? minutes : 0;
+  return Number.isFinite(minutes) ? minutes : DELIVERY_ZONE_FALLBACK.reservationMinutes;
 }
 
 function cupBoxSurcharge(cupBoxes){
@@ -755,7 +710,7 @@ function getLalamoveShipping(cupBoxes, lidBoxes){
 // Order Summary note spelling out how the Lalamove fee was computed.
 function lalamoveBreakdownText(shipping){
   if(!shipping) return '';
-  const parts = [`${shipping.zoneLabel || 'Location'} base ${formatPrice(shipping.baseRate)}`];
+  const parts = [`base ${formatPrice(shipping.baseRate)}`];
   if(shipping.cupBoxes > 0){
     parts.push(`cups ${shipping.cupBoxes} box${shipping.cupBoxes === 1 ? '' : 'es'} ${formatPrice(shipping.cupSurcharge)}`);
   }
@@ -763,12 +718,6 @@ function lalamoveBreakdownText(shipping){
     parts.push(`lids ${shipping.lidBoxes} box${shipping.lidBoxes === 1 ? '' : 'es'} ${formatPrice(shipping.lidSurcharge)}`);
   }
   return parts.join(' + ');
-}
-
-// Clear the City / Location selector (used when the cart is cleared/reset).
-function resetDeliveryZone(){
-  const select = getDeliveryZoneSelect();
-  if(select) select.value = '';
 }
 
 // Read the currently selected fulfillment radio (defaults to Customer Book).
@@ -800,47 +749,30 @@ function deliveryMethodLabel(method){
 }
 
 // Single source of truth for the checkout address sections. Shipping Address
-// (#deliveryAddressFields), the blue shipping-fee tip box
-// (#lalamove-guide-container) and City / Location (#deliveryZoneFields) are part
-// of the checkout flow again: they are VISIBLE for Lalamove Delivery (We book
-// for you) and HIDDEN for Customer Book / Self Pick-up. updateDeliveryFieldsVisibility()
-// is called from calculate(), handleDeliveryMethodChange(), resetConfigurator()
-// and openCart() so the sections always match the selected fulfillment option.
+// (#deliveryAddressFields) is the only conditional section: it sits directly
+// above the Fulfillment options and is VISIBLE for Lalamove Delivery (We book
+// for you), HIDDEN for Customer Book / Self Pick-up.
+// updateDeliveryFieldsVisibility() is called from calculate(),
+// handleDeliveryMethodChange(), resetConfigurator() and openCart() so the
+// section always matches the selected fulfillment option.
+//
+// NOTE: the City / Location picker (#deliveryZoneFields) and its
+// "Shipping Fee per City / Location" notice card (#lalamove-guide-container)
+// were removed from the checkout panel, so neither is toggled here anymore —
+// the courier estimate always quotes DELIVERY_ZONE_FALLBACK.
 function getDeliveryAddressFields(){
   return document.getElementById('deliveryAddressFields');
 }
 
-// Blue info/tip box directly above the City / Location dropdown: the itemized
-// Lalamove shipping fee per zone (Taguig City ₱60.00, Neighboring Cities
-// ₱90.00, Rest of Metro Manila ₱150.00, Nearby Provinces ₱280.00, Outer
-// Provincial ₱450.00 — see app.py LALAMOVE_ZONE_OPTIONS). styles.css documents
-// this contract: display block for Lalamove Delivery, display none for
-// Customer Book / Self Pick-up. It always moves together with the
-// Shipping Address + City / Location sections.
-function updateLalamoveGuideVisibility(showGuide){
-  const guide = document.getElementById('lalamove-guide-container');
-  if(!guide) return;
-  guide.classList.toggle('hidden', !showGuide);
-  if(showGuide){
-    guide.removeAttribute('aria-hidden');
-    guide.style.display = '';
-  } else {
-    guide.setAttribute('aria-hidden', 'true');
-    guide.style.display = 'none';
-  }
-}
-
 // Dynamic address visibility for the checkout drawer:
-//   - Lalamove Delivery (We book for you) -> SHOW the blue shipping-fee tip
-//     box, "Shipping Address" and "City / Location" so the courier
-//     destination (needed for the zone-based fee) can be captured.
-//   - Customer Book / Self Pick-up (pickup === true) -> HIDE all three
-//     again; no courier destination is collected for pick-up.
+//   - Lalamove Delivery (We book for you) -> SHOW "Shipping Address" so the
+//     courier destination can be captured.
+//   - Customer Book / Self Pick-up (pickup === true) -> HIDE it again; no
+//     courier destination is collected for pick-up.
 function updateDeliveryFieldsVisibility(pickup){
   const showFields = !pickup;
   const fields = getDeliveryAddressFields();
   const address = document.getElementById('customerAddress');
-  const zoneFields = document.getElementById('deliveryZoneFields');
   const setSectionVisible = (section, visible) => {
     if(!section) return;
     section.classList.toggle('hidden', !visible);
@@ -853,25 +785,12 @@ function updateDeliveryFieldsVisibility(pickup){
     }
   };
   setSectionVisible(fields, showFields);
-  setSectionVisible(zoneFields, showFields);
-  // Blue fee-breakdown tip box rides along with the two sections above.
-  updateLalamoveGuideVisibility(showFields);
   // Shipping Address is required only while Lalamove Delivery needs it
   // (mirrors the server-side check in app.py); hidden sections are never
   // required, so Customer Book / Self Pick-up submissions stay unaffected.
   if(address){
     if(showFields) address.setAttribute('required', '');
     else address.removeAttribute('required');
-  }
-  // The <select> itself stays ENABLED while hidden so a city picked earlier
-  // survives switching back to Lalamove Delivery; only its section is hidden.
-  const zone = getDeliveryZoneSelect();
-  if(zone){
-    zone.removeAttribute('disabled');
-    zone.disabled = false;
-    // Keep the picker out of the tab order only while it is hidden.
-    if(showFields) zone.removeAttribute('tabindex');
-    else zone.setAttribute('tabindex', '-1');
   }
 }
 
@@ -920,14 +839,11 @@ function updateSummary(data){
   const shipLine = shippingLabel && shippingLabel !== '—' ? `Shipping (${shippingLabel})` : 'Shipping';
   // Note under the shipping line of the Order Summary:
   //  - Customer Book / Self Pick-up: spell out the fulfillment instructions.
-  //  - Lalamove with no City / Location yet: prompt for the location.
-  //  - Lalamove with a location: show the computed base rate + surcharges.
+  //  - Lalamove Delivery: show how the courier estimate was computed.
   let shipNote = '';
   const summaryNote = fulfillmentNote(data.deliveryMethod);
   if(summaryNote){
     shipNote = `<div class="mt-1 text-xs font-medium leading-5 text-slate-700">${summaryNote}</div>`;
-  }else if(data.needsZone){
-    shipNote = '<div class="mt-1 text-xs font-medium leading-5 text-slate-700">Select your City / Location to estimate the Lalamove delivery fee.</div>';
   }else if(data.shippingBreakdown){
     shipNote = `<div class="mt-1 text-xs font-medium leading-5 text-slate-700">Lalamove fee: ${data.shippingBreakdown}</div>`;
   }
@@ -1050,44 +966,19 @@ async function clearCartItems(){
 
 
 // ---------------------------------------------------------------------------
-// GCash payment details for the Payment Instructions boxes in the Order
-// Confirmation Modal (#confirmGcash*) and the post-checkout Order Placed modal
-// (#pendingGcash*). A single account is listed as the sole payment option.
-// Defined once here so every payment screen shows the same wallet details.
-//
-// NOTE: the Order Summary drawer deliberately renders NO Payment Instructions
-// box — those details live ONLY in the Order Confirmation Modal, directly above
-// the required GCash proof upload field.
+// NOTE: The GCash QR code, Account Name and GCash Number are intentionally NOT
+// displayed anywhere in the storefront. The Payment Instructions boxes in the
+// Order Confirmation Modal and the post-checkout Order Placed modal therefore
+// render instruction copy only — no wallet values are injected from JavaScript.
+// The Order Summary drawer still renders no Payment Instructions box at all.
+// Customers receive the GCash account details from our team after the order is
+// confirmed.
 // ---------------------------------------------------------------------------
-const GCASH_ACCOUNT_1_NAME = 'JE****N ER***T E.';
-const GCASH_ACCOUNT_1_NUMBER = '0966 745 3719';
-// Legacy aliases (kept so any other code referencing the single-account names
-// keeps working — they point at the sole account).
-const GCASH_ACCOUNT_NAME = GCASH_ACCOUNT_1_NAME;
-const GCASH_ACCOUNT_NUMBER = GCASH_ACCOUNT_1_NUMBER;
-
-function renderGcashInstructions(){
-  // The drawer ids (#gcashAccountName / #gcashAccountNumber) were removed along
-  // with the Order Summary drawer's Payment Instructions box, so only the Order
-  // Confirmation Modal (#confirmGcash*) and the post-checkout Order Placed modal
-  // (#pendingGcash*) are updated here.
-  ['confirmGcashAccountName', 'pendingGcashAccountName'].forEach((id) => {
-    const el = document.getElementById(id);
-    if(el) el.textContent = GCASH_ACCOUNT_1_NAME;
-  });
-  ['confirmGcashAccountNumber', 'pendingGcashAccountNumber'].forEach((id) => {
-    const el = document.getElementById(id);
-    if(el) el.textContent = GCASH_ACCOUNT_1_NUMBER;
-  });
-}
 
 // Event wiring
 document.addEventListener('DOMContentLoaded', () => {
   resetConfigurator();
   fetchProducts();
-  // Push the GCash account details into the Order Confirmation Modal (and the
-  // post-checkout Order Placed modal) Payment Instructions boxes.
-  renderGcashInstructions();
   // Enforce the new defaults on first load: Self-Booking delivery + 100% Full
   // Payment, with Shipping Address / City / Location hidden.
   resetDeliveryMethod();
@@ -2186,47 +2077,34 @@ async function openConfirmationModal(){
   if (deliveryMethodField) {
     deliveryMethodField.textContent = DELIVERY_METHOD_LABELS[deliveryMethod] || DELIVERY_METHOD_LABELS[DELIVERY_METHOD_STANDARD];
   }
-  const deliveryZoneField = document.getElementById('confirmOrderDeliveryZone');
-  if (deliveryZoneField) {
-    deliveryZoneField.textContent = pickupMethod
-      ? '—'
-      : (deliveryZoneLabel() || 'Not selected');
-  }
-
-  // Dynamic payment reservation window for the selected City / Location.
+  // Payment reservation window: applies to Lalamove Delivery (We book for you),
+  // the only fulfillment option with a courier window. The window is the
+  // courier zone's reservation limit (selectedZoneReservationMinutes()).
   const reservationNote = document.getElementById('confirmOrderReservationNote');
   if (reservationNote) {
-    reservationNote.textContent = getSelectedDeliveryZone()
-      ? `⏳ Reserved for ${reservationWindowLabel(selectedZoneReservationMinutes())} from confirmation (${deliveryZoneLabel()}) — send your GCash payment within this window.`
-      : '';
+    reservationNote.textContent = pickupMethod
+      ? ''
+      : `⏳ Reserved for ${reservationWindowLabel(selectedZoneReservationMinutes())} from confirmation — send your GCash payment within this window.`;
   }
 
-  // Address line: Customer Book / Self Pick-up show the warehouse address;
-  // Lalamove Delivery shows the customer's Shipping Address instead
-  // (the row stays hidden when there is no address to show).
+  // Address line: Lalamove Delivery shows the customer's Shipping Address;
+  // Customer Book / Self Pick-up show NOTHING here (the warehouse Pick-up
+  // Address and Contact Number are intentionally not displayed on the site),
+  // so the row stays hidden for those methods and whenever there is no
+  // address to show.
   const addressRow = document.getElementById('confirmOrderAddressRow');
   const addressText = document.getElementById('confirmOrderAddressText');
-  const contactText = document.getElementById('confirmOrderContactText');
   if (addressRow && addressText) {
-    if (pickupMethod) {
-      addressText.textContent = `Pick-up Address: ${WAREHOUSE_PICKUP_ADDRESS}`;
-      if (contactText) {
-        contactText.textContent = `Contact Number: ${WAREHOUSE_CONTACT_NUMBER}`;
-        contactText.style.display = '';
-      }
+    const shippingAddress = pickupMethod
+      ? ''
+      : document.getElementById('customerAddress').value.trim();
+    if (shippingAddress) {
+      addressText.textContent = `Shipping Address: ${shippingAddress}`;
       addressRow.classList.remove('is-hidden-row');
       addressRow.classList.add('is-flex-row');
     } else {
-      const shippingAddress = document.getElementById('customerAddress').value.trim();
-      if (contactText) contactText.style.display = 'none';
-      if (shippingAddress) {
-        addressText.textContent = `Shipping Address: ${shippingAddress}`;
-        addressRow.classList.remove('is-hidden-row');
-        addressRow.classList.add('is-flex-row');
-      } else {
-        addressRow.classList.remove('is-flex-row');
-        addressRow.classList.add('is-hidden-row');
-      }
+      addressRow.classList.remove('is-flex-row');
+      addressRow.classList.add('is-hidden-row');
     }
   }
 

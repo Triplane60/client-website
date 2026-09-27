@@ -2,5 +2,4 @@ Flask
 gunicorn
 flask-cors
 python-dotenv
-resend
 Pillow

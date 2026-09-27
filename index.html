@@ -177,16 +177,7 @@
            -> RE 1000 -> RE 1600 -> RE 2500 -> RE 3200, with RE 1250 / RE 1450
            / RE 1650 slotting in by capacity if added) via compareMicrowavableAsc.
            Do not hardcode product cards here; keep that ascending sequence.
-           Image mapping (main.js getProductImage(), all rendered with
-           object-contain so photos never distort):
-             RO 10 Round Container -> ro10.jpg (static/ro10.jpg mirror)
-             RO 16 Round Container -> ro16.jpg (static/ro16.jpg mirror)
-             RO 30 Round Container -> ro30.jpg (static/ro30.jpg mirror)
-             RE 500 Rectangular Container -> re500.jpg (static/re500.jpg mirror)
-             RE 750 Rectangular Container -> re750.jpg (static/re750.jpg mirror)
-             RE 1000 Rectangular Container -> re1000.jpg (static/re1000.jpg mirror)
-             RE 1600 Rectangular Container -> re1600.jpg (static/re1600.jpg mirror)
-             RE 2500 Rectangular Container -> re2500.jpg (static/re2500.jpg mirror) -->
+           Cards intentionally render NO product images. -->
       <div id="microwavableList" class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4"></div>
     </section>
 
@@ -203,16 +194,16 @@
 
   <!-- Pending order modal: shown by main.js showOrderPendingModal() once the
        order has been saved by /api/checkout. Formatted as a GCash payment /
-       Order Invoice summary: the amount due captured at submit time, the GCash
-       wallet details (pushed by renderGcashInstructions into
-       #pendingGcashAccountName / #pendingGcashAccountNumber), and the
-       screenshot + SMS reminder with the customer's phone number (#modalPhone). -->
+       Order Invoice summary: the amount due captured at submit time plus the
+       screenshot + SMS reminder with the customer's phone number (#modalPhone).
+       The GCash QR code, Account Name and GCash Number are intentionally NOT
+       displayed anywhere on the site. -->
   <div id="orderPendingModal" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-900/60 p-4 opacity-0 transition-opacity duration-300" role="dialog" aria-modal="true" aria-labelledby="orderPendingTitle">
     <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl transition-transform duration-300">
       <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7"><path d="M20 6 9 17l-5-5"/></svg></div>
       <h2 id="orderPendingTitle" class="mt-4 text-center text-2xl font-bold text-slate-900">Order Placed &amp; Pending Payment</h2>
       <p class="mt-2 text-center text-sm font-medium leading-6 text-slate-700">
-        Your order was saved successfully. Send your GCash payment using the details below so we can process and dispatch it.
+        Your order was saved successfully. Send your GCash payment for the amount due so we can process and dispatch it.
       </p>
 
       <!-- Order invoice summary: Total Amount, the Amount Due now (50%
@@ -234,13 +225,12 @@
         </div>
       </div>
 
-      <!-- GCash Payment Details: single wallet mirrored in the checkout drawer
-           and the Confirm Order modal. -->
+      <!-- GCash Payment Details: no QR code, Account Name or GCash Number is
+           rendered on the website — the GCash account details come from our
+           team right after the order is confirmed. -->
       <div class="payment-instructions-box mt-3 space-y-1.5 rounded-lg border border-slate-300 p-3 text-left">
         <p class="payment-type-label">GCash Payment Details</p>
-        <p class="gcash-detail text-sm text-slate-700">Account Name: <strong id="pendingGcashAccountName">JE****N ER***T E.</strong></p>
-        <p class="gcash-detail text-sm text-slate-700">GCash Number: <strong id="pendingGcashAccountNumber">0966 745 3719</strong></p>
-        <p class="delivery-method-hint">Please send payment via GCash to the account listed below.</p>
+        <p class="delivery-method-hint">Please send your GCash payment for the amount due above. We will send the GCash account details right after your order is confirmed.</p>
       </div>
 
       <!-- Reminder: Lucide 'camera' icon for the payment screenshot, plus the
@@ -277,19 +267,14 @@
         <span>Delivery Method</span>
         <span id="confirmOrderDeliveryMethod" class="font-semibold text-slate-800">Lalamove Delivery</span>
       </div>
-      <div class="confirm-order-row mt-2 flex items-center justify-between text-sm text-slate-600">
-        <span>Delivery Area</span>
-        <span id="confirmOrderDeliveryZone" class="font-semibold text-slate-800">—</span>
-      </div>
-      <!-- Address line: warehouse Pick-up Address + Contact (Lucide 'map-pin')
-           when Customer Book or Self Pick-up is selected, otherwise the
-           customer's Shipping Address (hidden when empty). Populated by main.js. -->
+      <!-- Address line: shows ONLY the customer's Shipping Address (Lucide
+           'map-pin') for Lalamove Delivery, and stays hidden when empty —
+           or whenever Customer Book / Self Pick-up is selected, since the
+           warehouse Pick-up Address and Contact Number are intentionally NOT
+           displayed. Populated by main.js updateConfirmOrderSummary(). -->
       <div class="mt-3 flex items-start gap-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-700 is-hidden-row" id="confirmOrderAddressRow">
         <i data-lucide="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-indigo-600" aria-hidden="true"></i>
-        <span class="flex flex-col gap-1">
-          <span id="confirmOrderAddressText"></span>
-          <span id="confirmOrderContactText" class="font-semibold text-slate-800">Contact Number: [Insert Phone Number Here]</span>
-        </span>
+        <span id="confirmOrderAddressText"></span>
       </div>
       <div class="confirm-order-row mt-2 flex items-center justify-between text-sm font-semibold text-amber-700" id="confirmOrderFullRow">
         <span>Required Payment</span>
@@ -305,16 +290,13 @@
         <i data-lucide="camera" class="mt-0.5 h-3.5 w-3.5 text-indigo-600" aria-hidden="true"></i>
         <span>After paying, please save your payment screenshot or reference number for verification.</span>
       </p>
-      <!-- Payment Instructions: GCash QR + wallet shown in the Order
-           Confirmation Modal so customers can scan or copy the account
-           details before confirming. Values are pushed by main.js
-           (renderGcashInstructions) and mirror the checkout drawer values. -->
+      <!-- Payment Instructions: intentionally shows NO GCash QR code, Account
+           Name or GCash Number. main.js no longer injects any account values
+           here — customers receive the GCash account details from our team
+           right after the order is placed. -->
       <div class="payment-instructions-box mt-3 rounded-lg border border-slate-300 p-3 space-y-1.5 text-left">
         <p class="payment-type-label">Payment Instructions</p>
-        <img src="qr%20code.jpg" alt="GCash QR Code — JE****N ER***T E." class="gcash-qr-code mx-auto block w-52 max-w-full rounded-lg border border-slate-200 object-contain" loading="lazy" decoding="async" />
-        <p class="gcash-detail text-center">Account Name: <strong id="confirmGcashAccountName">JE****N ER***T E.</strong></p>
-        <p class="gcash-detail">GCash Number: <strong id="confirmGcashAccountNumber">0966 745 3719</strong></p>
-        <p class="delivery-method-hint">Please send payment via GCash to the account listed below (scan the QR code or send to the number).</p>
+        <p class="delivery-method-hint">We will send the GCash account details right after you place your order. Please have your payment screenshot ready to upload below.</p>
       </div>
       <!-- GCash proof of payment: REQUIRED screenshot upload shown directly
            below the Payment Instructions. main.js keeps "Yes, Place Order"
@@ -533,9 +515,8 @@
           <div class="p-4 border-t space-y-2.5" id="customerForm">
             <!-- Customer details, top to bottom:
                  1. Full Name  2. Phone Number  3. Shipping Address (shown for
-                 Lalamove Delivery)  4. City / Location (shown for Lalamove
-                 Delivery). Shipping Address and City / Location are restored
-                 in this drawer and toggled dynamically by
+                 Lalamove Delivery). The Shipping Address section sits directly
+                 above the Fulfillment options and is toggled dynamically by
                  updateDeliveryFieldsVisibility() in main.js: VISIBLE when
                  "Lalamove Delivery (We book for you)" is selected, HIDDEN for
                  the default "Customer Book" and "Self Pick-up (Warehouse)".
@@ -555,50 +536,18 @@
               <label for="customerAddress" class="block text-sm font-medium text-slate-700">Shipping Address</label>
               <textarea id="customerAddress" name="address" autocomplete="off" title="Shipping Address" class="w-full rounded-md border-gray-200 p-1.5" rows="2"></textarea>
             </div>
-            <!-- City / Location: shown ONLY for Lalamove Delivery (We book for
-                 you). main.js updateDeliveryFieldsVisibility() hides this whole
-                 section (aria-hidden + .hidden) for Customer Book / Self
-                 Pick-up — no courier fee or payment reservation window applies
-                 there, so the picker and its explanatory notes only add form
-                 clutter. The options (zone id, base rate + reservation window)
-                 come from app.py LALAMOVE_ZONE_OPTIONS so the storefront and
-                 the server always agree. -->
-            <div class="border border-slate-300 rounded-lg p-3 space-y-2.5 hidden" id="deliveryZoneFields" aria-hidden="true" style="display:none;">
-              <!-- Blue tip box: itemized Lalamove shipping fee per City / Location
-                   zone, rendered directly above the dropdown. main.js
-                   updateLalamoveGuideVisibility() (called from
-                   updateDeliveryFieldsVisibility()) shows it together with the
-                   Shipping Address + City / Location fields for Lalamove
-                   Delivery (We book for you) and hides it for Customer Book /
-                   Self Pick-up. The rates mirror app.py LALAMOVE_ZONE_OPTIONS
-                   (origin: Taguig) so the tip box, the <option data-rate>
-                   values and the server always agree. -->
-              <div id="lalamove-guide-container" aria-hidden="true" style="display:none;" class="hidden">
-                <div class="delivery-zone-info" role="note">
-                  <i data-lucide="info" aria-hidden="true"></i>
-                  <div class="delivery-zone-info-text">
-                    <strong>Shipping Fee per City / Location</strong>
-                    <span>Your City / Location sets the Lalamove base rate from our Taguig warehouse (box quantities add a small per-box surcharge):</span>
-                    <span class="block"><strong>Taguig City</strong> — ₱60.00</span>
-                    <span class="block"><strong>Neighboring Cities</strong> (Makati, Pasig, Pateros) — ₱90.00</span>
-                    <span class="block"><strong>Rest of Metro Manila</strong> — ₱150.00</span>
-                    <span class="block"><strong>Nearby Provinces</strong> (Rizal, Cavite, Laguna, Bulacan) — ₱280.00</span>
-                    <span class="block"><strong>Outer Provincial</strong> — ₱450.00</span>
-                  </div>
-                </div>
-              </div>
-              <label for="deliveryZone" class="block text-sm font-medium text-slate-700">City / Location</label>
-              <select id="deliveryZone" name="delivery_zone" onchange="calculate()" title="City / Location — Lalamove shipping origin: Taguig" class="payment-type-select" tabindex="-1">
-                <option value="" disabled>Select your city / area</option>
-                {% for zone in lalamove_zones %}
-                <option value="{{ zone.id }}" data-rate="{{ '%.2f'|format(zone.rate) }}" data-short="{{ zone.short }}" data-reservation="{{ zone.reservation_minutes }}">{{ zone.label }} — ₱{{ '%.2f'|format(zone.rate) }}</option>
-                {% endfor %}
-              </select>
-            </div>
+            <!-- NOTE: The "Shipping Fee per City / Location" rate card and the
+                 "City / Location" dropdown (#deliveryZone) were intentionally
+                 REMOVED from this checkout panel, so the Shipping Address
+                 section above now sits directly above the Fulfillment options.
+                 The Lalamove Delivery fee is computed in main.js from the
+                 default warehouse zone (DELIVERY_ZONE_FALLBACK), which mirrors
+                 app.py LALAMOVE_DEFAULT_ZONE — exactly what the server stores
+                 when a checkout no longer submits "delivery_zone". -->
 
             <!-- Fulfillment: 3 distinct choices —
                  1. Lalamove Delivery (We book for you): we arrange the booking,
-                    fee paid upon receipt or added to invoice (needs address + zone).
+                    fee paid upon receipt or added to invoice (needs the Shipping Address).
                  2. Customer Book (Buyer arranges Lalamove/Grab): you book your
                     preferred courier; warehouse address & contact sent on confirmation.
                  3. Self Pick-up (Warehouse): pick up directly at Bagumbayan, Taguig. -->
@@ -649,11 +598,11 @@
               <p class="breakdown-row-secondary" id="remaining-balance-row"><strong>Balance upon Delivery:</strong> <span id="remaining-balance-amount">₱0.00</span></p>
             </div>
 
-            <!-- NOTE: The Payment Instructions (GCash account details) box was
-                 intentionally REMOVED from this Order Summary drawer. Those
-                 details now live ONLY in the "Confirm Your Order" modal, right
-                 above the required GCash proof upload field (main.js
-                 renderGcashInstructions pushes the values into #confirmGcash*). -->
+            <!-- NOTE: This Order Summary drawer intentionally renders NO Payment
+                 Instructions (GCash details) box. The GCash QR code, Account
+                 Name and GCash Number are not displayed anywhere on the site;
+                 the "Confirm Your Order" modal only shows the instruction copy
+                 above the required GCash proof upload field. -->
 
             <!-- Cart payload hidden fields; populated by main.js before submission -->
             <input type="hidden" id="checkoutCupId" name="cup_id" value="" title="Checkout cup ID" />
@@ -718,7 +667,6 @@
           <h3 class="font-semibold text-white">Contact Us</h3>
           <div class="mt-3 space-y-2 text-sm text-gray-400">
             <p class="block">+63 928 181 5599</p>
-            <p class="block">jambyletesa@gmail.com</p>
           </div>
         </div>
       </div>

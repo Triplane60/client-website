@@ -1,0 +1,4 @@
+# Secrets / environment overrides — never commit real credentials.
+# .env still exists on disk (and app.py loads it via python-dotenv when
+# present), but its values stay out of version control from now on.
+.env

@@ -209,9 +209,8 @@ body.modal-open #floating-cart-btn {
    - #nav-orders-btn: the header's top-right cart/action button gets generous
      padding and a 28px glyph (~52x52 total) so it is clearly visible.
    These ID selectors deliberately out-specify the Tailwind utility classes on
-   the markup (the same trick used for the .delivery-zone-info .lucide sizing
-   below), so the sizing holds even though the Tailwind CDN injects its styles
-   at runtime.
+   the markup, so the sizing holds even though the Tailwind CDN injects its
+   styles at runtime.
    ---------------------------------------------------------------------------- */
 #floating-cart-btn {
   width: 56px;
@@ -300,49 +299,10 @@ input[type="number"] {
   color: #0f172a;
 }
 
-/* Product card image/placeholder caption: the placehold.co image text is
-   baked into a raster image and cannot be styled with CSS, so each card
-   also renders this DOM caption directly beneath its image. Bold/dark at
-   1.1rem–1.25rem so the product name (e.g. "RO 10 Round Container (10 oz)")
-   is easily readable on both desktop and mobile. */
-/* Product card media and image presentation:
-   For Cups and Lids (#productList), enlarged container height (h-64/h-72, 270px)
-   with object-contain and comfortable padding so the drinkware pictures appear
-   noticeably larger, sharper, and uncropped. */
-.product-card-media {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  background-color: #f8fafc;
-}
-
-#productList .product-card-media {
-  background-color: #f8fafc;
-}
-
-#productList .product-card-img {
-  height: 17rem; /* ~h-68 / 272px */
-  width: 100%;
-  object-fit: contain;
-  padding: 1rem;
-}
-
-#microwavableList .product-card-img {
-  height: 11rem;
-  width: 100%;
-  object-fit: contain;
-  padding: 0.75rem;
-  background-color: #ffffff;
-}
-
-.product-card-media-label {
-  display: block;
-  padding: 10px 20px 0;
-  font-size: clamp(1.1rem, 2.5vw, 1.25rem);
-  font-weight: 700;
-  line-height: 1.4;
-  color: #0f172a;
-}
+/* NOTE: The catalog cards intentionally render NO product images, so the
+   former .product-card-media / .product-card-img / .product-card-media-label
+   rules were removed together with the <img> markup in main.js
+   renderCatalog(). Only the text, price and quantity controls are styled. */
 
 /* Product card descriptions: consistent sizing (0.85rem–0.9rem) and line
    spacing across cups, lids, and microwavable cards. The 0.85rem base with
@@ -430,75 +390,16 @@ input[type="number"] {
 }
 
 /* Payment Instructions box — Order Confirmation Modal + post-checkout Order
-   Placed modal. Holds the GCash QR code + Account Name / Number that
-   customers scan/copy before paying. (The Order Summary drawer intentionally
-   renders NO such box — see the NOTE in index.html / main.js.) */
-.payment-instructions-box .gcash-detail {
-  display: block;
-  font-size: 14px;
-  line-height: 1.5;
-}
+   Placed modal. Renders instruction copy only: the GCash QR code, Account Name
+   and GCash Number are intentionally NOT displayed on the website. (The Order
+   Summary drawer likewise renders NO such box — see the NOTE in
+   index.html / main.js.) */
 
-/* GCash QR code image: prominently centered at the top of the Payment
-   Instructions box, square-ish and capped so it stays crisp on desktop
-   while max-width keeps it inside narrow mobile viewports. */
-.payment-instructions-box .gcash-qr-code {
-  display: block;
-  width: 208px;
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
-  margin: 4px auto 8px auto;
-  border-radius: 8px;
-}
-
-/* Lalamove location explainer container — "Why select your City / Location?"
-   banner directly above the City / Location dropdown.
-   main.js updateLalamoveGuideVisibility() toggles display block
-   (Lalamove Delivery) / none (Self-Booking) based on the Delivery Method
-   radios, synced on handleDeliveryMethodChange() + openCart(). */
-#lalamove-guide-container {
-  margin: 12px 0;
-}
-/* City / Location explainer — Lucide 'info' banner. Visibility is controlled
-   solely by the parent #lalamove-guide-container (display block/none). */
-.delivery-zone-info {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 12px 0 0;
-  padding: 16px 18px;
-  border: 1px solid #bfdbfe;
-  border-radius: 8px;
-  background: #eff6ff;
-  color: #1e3a8a;
-}
-
-.delivery-zone-info .lucide {
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
-  color: #1d4ed8;
-}
-
-.delivery-zone-info-text {
-  display: block;
-  font-size: 0.95rem;
-  line-height: 1.6;
-  color: #1e3a8a;
-}
-
-.delivery-zone-info-text strong {
-  font-weight: 700;
-  color: #1e40af;
-}
-
-.delivery-zone-info-text > strong {
-  display: block;
-  margin-bottom: 2px;
-  font-size: 1rem;
-  line-height: 1.6;
-}
+/* NOTE: The "Shipping Fee per City / Location" notice card
+   (#lalamove-guide-container / .delivery-zone-info*) and its City / Location
+   dropdown were removed from the checkout panel, so their rules (and
+   main.js updateLalamoveGuideVisibility()) were deleted as well. The Shipping
+   Address section now sits directly above the Fulfillment options. */
 
 .payment-breakdown {
   background: #f8f9fa;
@@ -1039,17 +940,17 @@ body.drawer-open #cartDrawer {
 }
 
 /* ============================================================
-   Mobile: enlarged Payment Instructions (GCash details)
+   Mobile: enlarged Payment Instructions box
    The Order Confirmation Modal's and the post-checkout Order
    Placed modal's "Payment Instructions" / "GCash Payment
    Details" box uses bigger text (1.1rem) and roomier padding on
-   phones/tablets so the GCash Account Name and Number are easy to
-   read and copy. 1024px also covers the phones that render the
-   site in "Desktop site" mode (~980px).
+   phones/tablets so the remaining instruction copy stays easy to
+   read. 1024px also covers the phones that render the site in
+   "Desktop site" mode (~980px).
 
-   (The Order Summary drawer no longer renders a Payment
-   Instructions box — those details live ONLY in the Order
-   Confirmation Modal, beside the GCash proof upload field.)
+   (The GCash QR code, Account Name and GCash Number are NOT
+   displayed anywhere, and the Order Summary drawer renders no
+   Payment Instructions box at all.)
    ============================================================ */
 @media (max-width: 1024px) {
   #confirmOrderModal .payment-instructions-box,
@@ -1066,15 +967,7 @@ body.drawer-open #cartDrawer {
     margin-bottom: 6px !important;
   }
 
-  /* GCash Account Name / Number — bold so they stand out for copying. */
-  #confirmOrderModal .payment-instructions-box .gcash-detail,
-  #confirmOrderModal .payment-instructions-box .gcash-detail strong,
-  #orderPendingModal .payment-instructions-box .gcash-detail,
-  #orderPendingModal .payment-instructions-box .gcash-detail strong {
-    font-weight: 700 !important;
-  }
-
-  /* Proof-of-payment hint: slightly smaller than the account details. */
+  /* Payment instruction hint under the box title. */
   #confirmOrderModal .payment-instructions-box .delivery-method-hint,
   #orderPendingModal .payment-instructions-box .delivery-method-hint {
     font-size: 1rem !important;
@@ -1128,7 +1021,6 @@ body.drawer-open #cartDrawer {
 
   /* 2a. Product titles + section headings: bold. */
   .product-card-title,
-  .product-card-media-label,
   .delivery-method-title,
   .payment-type-label,
   #drawerPanel .payment-type-label,
@@ -1138,8 +1030,7 @@ body.drawer-open #cartDrawer {
     font-weight: 700 !important;
   }
 
-  .product-card-title,
-  .product-card-media-label {
+  .product-card-title {
     font-size: 1.25rem !important;
     line-height: 1.6 !important;
   }
@@ -1173,16 +1064,7 @@ body.drawer-open #cartDrawer {
     line-height: 1.6 !important;
   }
 
-  /* 2c. City / Location explainer heading: bold + slightly enlarged. */
-  .delivery-zone-info-text > strong {
-    font-weight: 700 !important;
-    font-size: 1.15rem !important;
-    line-height: 1.6 !important;
-  }
-
-  /* 3. Readability: roomier line-height for explainer + hints. */
-  .delivery-zone-info-text,
-  .delivery-zone-info-text span,
+  /* 3. Readability: roomier line-height for fulfillment hints + product copy. */
   .delivery-method-hint,
   #drawerPanel .delivery-method-hint,
   .product-card-desc {
@@ -1212,10 +1094,6 @@ body.drawer-open #cartDrawer {
     min-height: 48px !important;
     padding: 12px 14px !important;
     box-sizing: border-box !important;
-  }
-
-  .product-card-media-label {
-    padding: 12px 16px 0 !important;
   }
 }
 
@@ -1344,7 +1222,7 @@ select:-webkit-autofill:active {
    the amber notices stay clearly readable inside the wider panel.
 
    Nothing is ever SHRUNK: the rule only targets copy that is
-   currently 12px (text-xs), 14px (text-sm / .gcash-detail) or 12px
+   currently 12px (text-xs), 14px (text-sm) or 12px
    (.delivery-method-hint / .wholesale-notice). The ID-led selectors
    out-specify Tailwind's .text-xs / .text-sm utilities, so the sizes
    hold regardless of stylesheet order. Headings, the lead paragraph
@@ -1360,7 +1238,6 @@ select:-webkit-autofill:active {
 #confirmOrderModal #confirmOrderReservationNote,
 #confirmOrderModal .wholesale-notice,
 #confirmOrderModal #confirmOrderProofBox label,
-#confirmOrderModal .payment-instructions-box .gcash-detail,
 #confirmOrderModal .payment-instructions-box .delivery-method-hint {
   font-size: 0.95rem;
   font-weight: 600;
@@ -1380,11 +1257,6 @@ select:-webkit-autofill:active {
   font-size: 1rem;
   font-weight: 600;
   line-height: 1.5;
-}
-
-/* The GCash account name / number stay the boldest copy in the box. */
-#confirmOrderModal .payment-instructions-box .gcash-detail strong {
-  font-weight: 700;
 }
 
 /* Upload-field status / validation message: the red error state (added by
